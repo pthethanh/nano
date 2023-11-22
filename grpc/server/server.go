@@ -1,4 +1,4 @@
-package grpc
+package server
 
 import (
 	"context"
@@ -47,7 +47,7 @@ type (
 		router *mux.Router
 	}
 
-	ServerOption func(srv *Server)
+	Option func(srv *Server)
 
 	service interface {
 		Register(srv *grpc.Server)
@@ -68,7 +68,7 @@ type (
 	}
 )
 
-func NewServer(opts ...ServerOption) *Server {
+func New(opts ...Option) *Server {
 	srv := &Server{
 		addr:          ":8000",
 		logger:        slog.Default(),

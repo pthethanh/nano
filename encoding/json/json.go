@@ -1,48 +1,26 @@
 package json
 
 import (
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/bytedance/sonic"
 	"github.com/pthethanh/nano/encoding"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type (
-	codec struct {
-		m *runtime.JSONPb
-	}
-)
-
-const (
-	// Name is json codec name.
-	Name = "json"
+	codec struct{}
 )
 
 func init() {
-	encoding.RegisterCodec(newCodec())
-}
-
-func newCodec() *codec {
-	return &codec{
-		m: &runtime.JSONPb{
-			MarshalOptions: protojson.MarshalOptions{
-				UseProtoNames:  true,
-				UseEnumNumbers: true,
-			},
-			UnmarshalOptions: protojson.UnmarshalOptions{
-				DiscardUnknown: true,
-			},
-		},
-	}
+	encoding.RegisterCodec(&codec{})
 }
 
 func (m *codec) Marshal(v interface{}) ([]byte, error) {
-	return m.m.Marshal(v)
+	return sonic.Marshal(v)
 }
 
 func (m *codec) Unmarshal(data []byte, v interface{}) error {
-	return m.m.Unmarshal(data, v)
+	return sonic.Unmarshal(data, v)
 }
 
 func (m *codec) Name() string {
-	return Name
+	return "json"
 }

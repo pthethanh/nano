@@ -1,4 +1,4 @@
-package grpc
+package server
 
 import (
 	"context"
@@ -17,35 +17,35 @@ type (
 )
 
 // Logger provide alternate logger for server logging
-func Logger(logger logger) ServerOption {
+func Logger(logger logger) Option {
 	return func(srv *Server) {
 		srv.logger = logger
 	}
 }
 
 // OnShutdown provide custom func to be called before shutting down
-func OnShutdown(f func()) ServerOption {
+func OnShutdown(f func()) Option {
 	return func(srv *Server) {
 		srv.onShutdown = f
 	}
 }
 
 // ServerOpts provides additional grpc server opts for server creation.
-func ServerOpts(opts ...grpc.ServerOption) ServerOption {
+func ServerOpts(opts ...grpc.ServerOption) Option {
 	return func(srv *Server) {
 		srv.serverOpts = opts
 	}
 }
 
 // GateWayOpts provide additional options for api gateway
-func GateWayOpts(opts ...runtime.ServeMuxOption) ServerOption {
+func GateWayOpts(opts ...runtime.ServeMuxOption) Option {
 	return func(srv *Server) {
 		srv.gwOpts = opts
 	}
 }
 
 // Timeout set read, write timeout for internal http server.
-func Timeout(read, write time.Duration) ServerOption {
+func Timeout(read, write time.Duration) Option {
 	return func(srv *Server) {
 		srv.readTimeout = read
 		srv.writeTimeout = write
@@ -53,7 +53,7 @@ func Timeout(read, write time.Duration) ServerOption {
 }
 
 // TLS enable secure mode using tls key & cert file.
-func TLS(certFile, keyFile string) ServerOption {
+func TLS(certFile, keyFile string) Option {
 	return func(srv *Server) {
 		srv.tlsCertFile = certFile
 		srv.tlsKeyFile = keyFile
@@ -67,28 +67,28 @@ func TLS(certFile, keyFile string) ServerOption {
 }
 
 // Address set server address
-func Address(addr string) ServerOption {
+func Address(addr string) Option {
 	return func(srv *Server) {
 		srv.addr = addr
 	}
 }
 
 // APIPrefix defines grpc gateway api prefix
-func APIPrefix(prefix string) ServerOption {
+func APIPrefix(prefix string) Option {
 	return func(srv *Server) {
 		srv.apiPathPrefix = prefix
 	}
 }
 
 // Handler provide ability to define additional HTTP apis beside GRPC Gateway API
-func Handler(pathPrefix string, h http.Handler) ServerOption {
+func Handler(pathPrefix string, h http.Handler) Option {
 	return func(srv *Server) {
 		srv.router.PathPrefix(pathPrefix).Handler(h)
 	}
 }
 
 // NotFoundHandler provide alternative not found HTTP handler.
-func NotFoundHandler(h http.Handler) ServerOption {
+func NotFoundHandler(h http.Handler) Option {
 	return func(srv *Server) {
 		srv.router.NotFoundHandler = h
 		srv.gwOpts = append(srv.gwOpts, runtime.WithRoutingErrorHandler(func(ctx context.Context, sm *runtime.ServeMux, m runtime.Marshaler, w http.ResponseWriter, r *http.Request, i int) {
@@ -102,7 +102,7 @@ func NotFoundHandler(h http.Handler) ServerOption {
 }
 
 // Middlewares apply the given middleware on all HTTP requests
-func Middlewares(mdws ...middleware) ServerOption {
+func Middlewares(mdws ...middleware) Option {
 	return func(srv *Server) {
 		for _, mdw := range mdws {
 			srv.router.Use(mdw)
@@ -111,7 +111,7 @@ func Middlewares(mdws ...middleware) ServerOption {
 }
 
 // Listener force server to use the given listener.
-func Listener(lis net.Listener) ServerOption {
+func Listener(lis net.Listener) Option {
 	return func(srv *Server) {
 		srv.lis = lis
 	}
