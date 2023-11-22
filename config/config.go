@@ -1,0 +1,131 @@
+package config
+
+import (
+	"context"
+	"log/slog"
+	"os"
+	"strings"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/joho/godotenv"
+	"github.com/spf13/viper"
+)
+
+type (
+	Reader[T any] struct {
+		opts *options
+		vp   *viper.Viper
+		log  Logger
+	}
+
+	Logger interface {
+		Log(ctx context.Context, level slog.Level, msg string, args ...any)
+	}
+)
+
+func NewReader[T any](opts ...Option) (*Reader[T], error) {
+	r := &Reader[T]{
+		vp: viper.New(),
+		opts: &options{
+			envReplacers: []*strings.Replacer{
+				strings.NewReplacer(".", "_"),
+			},
+		},
+		log: slog.Default(),
+	}
+	for _, apply := range opts {
+		apply(r.opts)
+	}
+
+	if r.opts.envPrefix != "" {
+		r.vp.SetEnvPrefix(r.opts.envPrefix)
+	}
+	for _, replacer := range r.opts.envReplacers {
+		r.vp.SetEnvKeyReplacer(replacer)
+	}
+	if r.opts.local {
+		r.vp.SetConfigName(r.opts.localName)
+		r.vp.SetConfigType(r.opts.localType)
+		// include current folder if not specify
+		if len(r.opts.localPaths) == 0 {
+			r.opts.localPaths = append(r.opts.localPaths, ".")
+		}
+		for _, p := range r.opts.localPaths {
+			r.vp.AddConfigPath(p)
+		}
+	}
+	if r.opts.localFile {
+		r.vp.SetConfigFile(r.opts.localFilePath)
+	}
+	if r.opts.remote {
+		r.vp.SetConfigType(r.opts.remoteType)
+		if err := r.vp.AddRemoteProvider(r.opts.remoteProvider, r.opts.remoteEndpoint, r.opts.remotePath); err != nil {
+			return nil, err
+		}
+	}
+	if r.opts.remoteSecured {
+		r.vp.SetConfigType(r.opts.remoteType)
+		if err := r.vp.AddSecureRemoteProvider(r.opts.remoteProvider, r.opts.remoteEndpoint, r.opts.remotePath, r.opts.remoteSecuredSecret); err != nil {
+			return nil, err
+		}
+	}
+	if r.isLocal() {
+		r.vp.AutomaticEnv()
+		r.loadEnv()
+	}
+	if r.opts.onChange != nil {
+		r.vp.OnConfigChange(func(in fsnotify.Event) {
+			r.opts.onChange(in)
+		})
+	}
+
+	return r, nil
+}
+
+func MustNewReader[T any](opts ...Option) *Reader[T] {
+	r, err := NewReader[T](opts...)
+	if err != nil {
+		panic(err)
+	}
+	return r
+}
+
+func (r *Reader[T]) Read(ctx context.Context) (*T, error) {
+	if r.isLocal() {
+		if err := r.vp.ReadInConfig(); err != nil {
+			return nil, err
+		}
+	}
+	if r.isRemote() {
+		if err := r.vp.ReadRemoteConfig(); err != nil {
+			return nil, err
+		}
+	}
+	t := new(T)
+	if err := r.vp.Unmarshal(t); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func (r *Reader[T]) isLocal() bool {
+	return r.opts.local || r.opts.localFile
+}
+
+func (r *Reader[T]) isRemote() bool {
+	return r.opts.remote || r.opts.remoteSecured
+}
+
+func (r *Reader[T]) loadEnv() {
+	if len(r.opts.envFiles) > 0 {
+		r.log.Log(context.Background(), slog.LevelInfo, "loading env file", "files", r.opts.envFiles)
+		for _, p := range r.opts.envFiles {
+			if _, err := os.Stat(p); err != nil {
+				continue
+			}
+			if err := godotenv.Overload(p); err != nil {
+				r.log.Log(context.Background(), slog.LevelError, "failed to load env file", "name", r.opts.envFiles, "error", err)
+			}
+		}
+	}
+}

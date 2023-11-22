@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package helloworld;
+option go_package = "github.com/pthethanh/nano/examples/helloworld/api;api";
+
+import "google/api/annotations.proto";
+
+// The hello service definition.
+service Hello {
+  // Sends a hello
+  rpc SayHello (HelloRequest) returns (HelloResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/hello"
+      body: "*"
+    };
+  }
+}
+
+// The request message containing the user's name.
+message HelloRequest {
+  string name = 1;
+}
+
+// The response message containing the hello
+message HelloResponse {
+  string message = 1;
+}

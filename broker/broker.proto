@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package broker;
+option go_package = "github.com/pthethanh/nano/broker;broker";
+
+message Message {
+	map<string,string> header = 1;
+	bytes body = 2;
+}
