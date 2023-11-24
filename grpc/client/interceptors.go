@@ -6,6 +6,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+var (
+	WithChainUnaryInterceptor  = grpc.WithChainUnaryInterceptor
+	WithChainStreamInterceptor = grpc.WithChainStreamInterceptor
+)
+
 func ContextUnaryInterceptor(f func(context.Context) (context.Context, error)) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		newCtx, err := f(ctx)
