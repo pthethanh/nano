@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"net"
 	"net/http"
 	"net/textproto"
@@ -14,106 +13,155 @@ import (
 
 type (
 	middleware = func(http.Handler) http.Handler
+
+	customServerOption interface {
+		nanoCustomOpt()
+	}
+
+	emptyOpt struct {
+		grpc.ServerOption
+		customServerOption
+	}
+
+	loggerOpt struct {
+		emptyOpt
+		logger logger
+	}
+
+	onShutdownOpt struct {
+		emptyOpt
+		f func()
+	}
+	gwOpt struct {
+		emptyOpt
+		opts []runtime.ServeMuxOption
+	}
+
+	timeoutOpt struct {
+		emptyOpt
+		read  time.Duration
+		write time.Duration
+	}
+
+	tlsOpt struct {
+		emptyOpt
+		certFile string
+		keyFile  string
+		dialOpt  []grpc.DialOption
+	}
+
+	addrOpt struct {
+		emptyOpt
+		addr string
+	}
+
+	apiPrefixOpt struct {
+		emptyOpt
+		prefix string
+	}
+
+	handlerOpt struct {
+		emptyOpt
+		prefix string
+		h      http.Handler
+	}
+
+	notFoundHandlerOpt struct {
+		emptyOpt
+		h http.Handler
+	}
+	mdwOpt struct {
+		emptyOpt
+		mdws []middleware
+	}
+	lisOpt struct {
+		emptyOpt
+		lis net.Listener
+	}
 )
 
 // Logger provide alternate logger for server logging
-func Logger(logger logger) Option {
-	return func(srv *Server) {
-		srv.logger = logger
+func Logger(logger logger) grpc.ServerOption {
+	return loggerOpt{
+		logger: logger,
 	}
 }
 
 // OnShutdown provide custom func to be called before shutting down
-func OnShutdown(f func()) Option {
-	return func(srv *Server) {
-		srv.onShutdown = f
-	}
-}
-
-// ServerOpts provides additional grpc server opts for server creation.
-func ServerOpts(opts ...grpc.ServerOption) Option {
-	return func(srv *Server) {
-		srv.serverOpts = opts
+func OnShutdown(f func()) grpc.ServerOption {
+	return onShutdownOpt{
+		f: f,
 	}
 }
 
 // GateWayOpts provide additional options for api gateway
-func GateWayOpts(opts ...runtime.ServeMuxOption) Option {
-	return func(srv *Server) {
-		srv.gwOpts = opts
+func GateWayOpts(opts ...runtime.ServeMuxOption) grpc.ServerOption {
+	return gwOpt{
+		opts: opts,
 	}
 }
 
 // Timeout set read, write timeout for internal http server.
-func Timeout(read, write time.Duration) Option {
-	return func(srv *Server) {
-		srv.readTimeout = read
-		srv.writeTimeout = write
+func Timeout(read, write time.Duration) grpc.ServerOption {
+	return timeoutOpt{
+		read:  read,
+		write: write,
 	}
 }
 
 // TLS enable secure mode using tls key & cert file.
-func TLS(certFile, keyFile string) Option {
-	return func(srv *Server) {
-		srv.tlsCertFile = certFile
-		srv.tlsKeyFile = keyFile
-		srv.secure = true
-		creds, err := credentials.NewClientTLSFromFile(certFile, "")
-		if err != nil {
-			panic(err)
-		}
-		srv.dialOpts = []grpc.DialOption{grpc.WithTransportCredentials(creds)}
+func TLS(certFile, keyFile string) grpc.ServerOption {
+	creds, err := credentials.NewClientTLSFromFile(certFile, "")
+	if err != nil {
+		panic(err)
+	}
+	return tlsOpt{
+		keyFile:  keyFile,
+		certFile: certFile,
+		dialOpt:  []grpc.DialOption{grpc.WithTransportCredentials(creds)},
 	}
 }
 
 // Address set server address
-func Address(addr string) Option {
-	return func(srv *Server) {
-		srv.addr = addr
+func Address(addr string) grpc.ServerOption {
+	return addrOpt{
+		addr: addr,
 	}
 }
 
 // APIPrefix defines grpc gateway api prefix
-func APIPrefix(prefix string) Option {
-	return func(srv *Server) {
-		srv.apiPathPrefix = prefix
+func APIPrefix(prefix string) grpc.ServerOption {
+	return apiPrefixOpt{
+		prefix: prefix,
 	}
 }
 
 // Handler provide ability to define additional HTTP apis beside GRPC Gateway API
-func Handler(pathPrefix string, h http.Handler) Option {
-	return func(srv *Server) {
-		srv.router.PathPrefix(pathPrefix).Handler(h)
+func Handler(pathPrefix string, h http.Handler) grpc.ServerOption {
+	return handlerOpt{
+		prefix: pathPrefix,
+		h:      h,
 	}
 }
 
 // NotFoundHandler provide alternative not found HTTP handler.
-func NotFoundHandler(h http.Handler) Option {
-	return func(srv *Server) {
-		srv.router.NotFoundHandler = h
-		srv.gwOpts = append(srv.gwOpts, runtime.WithRoutingErrorHandler(func(ctx context.Context, sm *runtime.ServeMux, m runtime.Marshaler, w http.ResponseWriter, r *http.Request, i int) {
-			if http.StatusNotFound == i {
-				h.ServeHTTP(w, r)
-				return
-			}
-			runtime.DefaultRoutingErrorHandler(ctx, sm, m, w, r, i)
-		}))
+func NotFoundHandler(h http.Handler) grpc.ServerOption {
+	return notFoundHandlerOpt{
+		h: h,
 	}
 }
 
 // Middlewares apply the given middleware on all HTTP requests
-func Middlewares(mdws ...middleware) Option {
-	return func(srv *Server) {
-		for _, mdw := range mdws {
-			srv.router.Use(mdw)
-		}
+func Middlewares(mdws ...middleware) grpc.ServerOption {
+	return mdwOpt{
+		mdws: mdws,
 	}
 }
 
 // Listener force server to use the given listener.
-func Listener(lis net.Listener) Option {
-	return func(srv *Server) {
-		srv.lis = lis
+func Listener(lis net.Listener) grpc.ServerOption {
+	return lisOpt{
+		lis: lis,
 	}
 }
 

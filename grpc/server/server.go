@@ -47,8 +47,6 @@ type (
 		router *mux.Router
 	}
 
-	Option func(srv *Server)
-
 	service interface {
 		Register(srv *grpc.Server)
 	}
@@ -68,26 +66,17 @@ type (
 	}
 )
 
-func New(opts ...Option) *Server {
+func New(opts ...grpc.ServerOption) *Server {
 	srv := &Server{
 		addr:          ":8000",
 		logger:        slog.Default(),
 		router:        mux.NewRouter(),
 		http2Srv:      &http2.Server{},
 		apiPathPrefix: "/",
+		dialOpts:      []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())},
+		gwOpts:        []runtime.ServeMuxOption{headerMatcher([]string{"X-Request-Id", "X-Correlation-ID", "Api-Key"})},
 	}
-	for _, apply := range opts {
-		apply(srv)
-	}
-	// apply default options if not defined.
-	if len(srv.dialOpts) == 0 {
-		srv.dialOpts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	}
-	if len(srv.gwOpts) == 0 {
-		srv.gwOpts = []runtime.ServeMuxOption{
-			headerMatcher([]string{"X-Request-Id", "X-Correlation-ID", "Api-Key"}),
-		}
-	}
+	srv.apply(opts...)
 	srv.grpcSrv = grpc.NewServer(srv.serverOpts...)
 	srv.gw = runtime.NewServeMux(srv.gwOpts...)
 	srv.httpSrv = &http.Server{
@@ -110,6 +99,55 @@ func (srv *Server) ListenAndServe(ctx context.Context, services ...any) error {
 		return err
 	}
 	return nil
+}
+
+func (srv *Server) apply(opts ...grpc.ServerOption) {
+	for _, opt := range opts {
+		if _, ok := opt.(customServerOption); ok {
+			switch opt := opt.(type) {
+			case loggerOpt:
+				srv.logger = opt.logger
+			case onShutdownOpt:
+				srv.onShutdown = opt.f
+			case gwOpt:
+				srv.gwOpts = append(srv.gwOpts, opt.opts...)
+			case notFoundHandlerOpt:
+				srv.router.NotFoundHandler = opt.h
+				srv.gwOpts = append(srv.gwOpts, runtime.WithRoutingErrorHandler(func(ctx context.Context, sm *runtime.ServeMux, m runtime.Marshaler, w http.ResponseWriter, r *http.Request, i int) {
+					if http.StatusNotFound == i {
+						opt.h.ServeHTTP(w, r)
+						return
+					}
+					runtime.DefaultRoutingErrorHandler(ctx, sm, m, w, r, i)
+				}))
+			case apiPrefixOpt:
+				srv.apiPathPrefix = opt.prefix
+			case timeoutOpt:
+				srv.readTimeout = opt.read
+				srv.writeTimeout = opt.write
+			case tlsOpt:
+				srv.tlsCertFile = opt.certFile
+				srv.tlsKeyFile = opt.keyFile
+				srv.secure = true
+				srv.dialOpts = append(srv.dialOpts, opt.dialOpt...)
+			case lisOpt:
+				srv.lis = opt.lis
+				srv.addr = opt.lis.Addr().String()
+			case addrOpt:
+				srv.addr = opt.addr
+				srv.lis = nil
+			case handlerOpt:
+				srv.router.PathPrefix(opt.prefix).Handler(opt.h)
+			case mdwOpt:
+				for _, mdw := range opt.mdws {
+					srv.router.Use(mdw)
+				}
+			}
+		} else {
+			fmt.Printf("%#v\n", opt)
+			srv.serverOpts = append(srv.serverOpts, opt)
+		}
+	}
 }
 
 func (srv *Server) listenAndServe(ctx context.Context) error {
