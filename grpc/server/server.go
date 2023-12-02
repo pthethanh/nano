@@ -27,21 +27,22 @@ type (
 		services []any
 
 		// grpc
-		lis           net.Listener
-		grpcSrv       *grpc.Server
-		httpSrv       *http.Server
-		http2Srv      *http2.Server
-		gw            *runtime.ServeMux
-		dialOpts      []grpc.DialOption
-		serverOpts    []grpc.ServerOption
-		gwOpts        []runtime.ServeMuxOption
-		secure        bool
-		readTimeout   time.Duration
-		writeTimeout  time.Duration
-		tlsCertFile   string
-		tlsKeyFile    string
-		onShutdown    func()
-		apiPathPrefix string
+		lis             net.Listener
+		grpcSrv         *grpc.Server
+		httpSrv         *http.Server
+		http2Srv        *http2.Server
+		gw              *runtime.ServeMux
+		dialOpts        []grpc.DialOption
+		serverOpts      []grpc.ServerOption
+		gwOpts          []runtime.ServeMuxOption
+		secure          bool
+		readTimeout     time.Duration
+		writeTimeout    time.Duration
+		shutdownTimeout time.Duration
+		tlsCertFile     string
+		tlsKeyFile      string
+		onShutdown      func()
+		apiPathPrefix   string
 
 		// normal http router
 		router *mux.Router
@@ -68,13 +69,14 @@ type (
 
 func New(opts ...grpc.ServerOption) *Server {
 	srv := &Server{
-		addr:          ":8000",
-		logger:        slog.Default(),
-		router:        mux.NewRouter(),
-		http2Srv:      &http2.Server{},
-		apiPathPrefix: "/",
-		dialOpts:      []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())},
-		gwOpts:        []runtime.ServeMuxOption{headerMatcher([]string{"X-Request-Id", "X-Correlation-ID", "Api-Key"})},
+		addr:            ":8000",
+		logger:          slog.Default(),
+		router:          mux.NewRouter(),
+		http2Srv:        &http2.Server{},
+		apiPathPrefix:   "/",
+		shutdownTimeout: -1,
+		dialOpts:        []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())},
+		gwOpts:          []runtime.ServeMuxOption{headerMatcher([]string{"X-Request-Id", "X-Correlation-ID", "Api-Key"})},
 	}
 	srv.apply(opts...)
 	srv.grpcSrv = grpc.NewServer(srv.serverOpts...)
@@ -142,9 +144,10 @@ func (srv *Server) apply(opts ...grpc.ServerOption) {
 				for _, mdw := range opt.mdws {
 					srv.router.Use(mdw)
 				}
+			case shutdownTimeout:
+				srv.shutdownTimeout = opt.timeout
 			}
 		} else {
-			fmt.Printf("%#v\n", opt)
 			srv.serverOpts = append(srv.serverOpts, opt)
 		}
 	}
@@ -175,8 +178,7 @@ func (srv *Server) listenAndServe(ctx context.Context) error {
 	// handle gracefully shutdown
 	select {
 	case <-ctx.Done():
-		srv.logger.Log(ctx, slog.LevelInfo, "server is shutting down")
-		if err := srv.httpSrv.Shutdown(ctx); err != nil {
+		if err := srv.shutdown(ctx); err != nil {
 			return err
 		}
 		return context.Cause(ctx)
@@ -185,8 +187,7 @@ func (srv *Server) listenAndServe(ctx context.Context) error {
 	case s := <-sigs:
 		switch s {
 		case os.Interrupt, syscall.SIGTERM:
-			srv.logger.Log(ctx, slog.LevelInfo, "server is shutting down")
-			if err := srv.httpSrv.Shutdown(ctx); err != nil {
+			if err := srv.shutdown(ctx); err != nil {
 				return err
 			}
 			return nil
@@ -195,7 +196,19 @@ func (srv *Server) listenAndServe(ctx context.Context) error {
 	return nil
 }
 
+func (srv *Server) shutdown(ctx context.Context) error {
+	srv.logger.Log(ctx, slog.LevelInfo, "server is shutting down")
+	newCtx := ctx
+	if srv.shutdownTimeout >= 0 {
+		ctx, cancel := context.WithTimeout(ctx, srv.shutdownTimeout)
+		newCtx = ctx
+		defer cancel()
+	}
+	return srv.httpSrv.Shutdown(newCtx)
+}
+
 func (srv *Server) registerServices(ctx context.Context, services ...any) error {
+	enableGw := false
 	for _, s := range services {
 		valid := false
 		if h, ok := s.(service); ok {
@@ -206,6 +219,7 @@ func (srv *Server) registerServices(ctx context.Context, services ...any) error 
 			valid = true
 		}
 		if h, ok := s.(grpcEndpoint); ok {
+			enableGw = true
 			h.RegisterWithEndpoint(ctx, srv.gw, srv.addr, srv.dialOpts)
 			valid = true
 		}
@@ -215,15 +229,21 @@ func (srv *Server) registerServices(ctx context.Context, services ...any) error 
 			valid = true
 		}
 		if h, ok := s.(http.Handler); ok {
-			srv.router.Handle("", h)
+			srv.router.Handle("/", h)
 			valid = true
 		}
 		if !valid {
 			return ErrUnknownServiceType
 		}
-		srv.logger.Log(ctx, slog.LevelInfo, "registered service successfully", "name", fmt.Sprintf("%T", s))
+		name := fmt.Sprintf("%T", s)
+		if nameSrv, ok := s.(interface{ Name() string }); ok {
+			name = nameSrv.Name()
+		}
+		srv.logger.Log(ctx, slog.LevelInfo, "registered service successfully", "name", name)
 	}
-	srv.router.PathPrefix(srv.apiPathPrefix).Handler(srv.gw)
+	if enableGw {
+		srv.router.PathPrefix(srv.apiPathPrefix).Handler(srv.gw)
+	}
 	return nil
 }
 

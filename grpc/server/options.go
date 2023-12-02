@@ -74,9 +74,15 @@ type (
 		emptyOpt
 		mdws []middleware
 	}
+
 	lisOpt struct {
 		emptyOpt
 		lis net.Listener
+	}
+
+	shutdownTimeout struct {
+		emptyOpt
+		timeout time.Duration
 	}
 )
 
@@ -136,7 +142,8 @@ func APIPrefix(prefix string) grpc.ServerOption {
 	}
 }
 
-// Handler provide ability to define additional HTTP apis beside GRPC Gateway API
+// Handler provide ability to define additional HTTP apis beside GRPC Gateway API.
+// All HTTP API with the given prefix will be forwarded to the given handler.
 func Handler(pathPrefix string, h http.Handler) grpc.ServerOption {
 	return handlerOpt{
 		prefix: pathPrefix,
@@ -162,6 +169,13 @@ func Middlewares(mdws ...middleware) grpc.ServerOption {
 func Listener(lis net.Listener) grpc.ServerOption {
 	return lisOpt{
 		lis: lis,
+	}
+}
+
+// ShutdownTimeout define timeout on shutdown.
+func ShutdownTimeout(d time.Duration) grpc.ServerOption {
+	return shutdownTimeout{
+		timeout: d,
 	}
 }
 

@@ -72,4 +72,8 @@ func (g *nano) generateService(file *generator.FileDescriptor, service *pb.Servi
 		g.P("Register" + serviceName + "HandlerFromEndpoint(ctx, mux, endpoint, opts)")
 		g.P("}")
 	}
+	g.P()
+	g.P("func (", serviceAlias, ") Name() string {")
+	g.P("return \"", serviceName+"Server\"")
+	g.P("}")
 }

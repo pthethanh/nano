@@ -28,3 +28,7 @@ func (UnimplementedHelloServer) ServiceDesc() *grpc.ServiceDesc {
 func (UnimplementedHelloServer) RegisterWithEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) {
 	RegisterHelloHandlerFromEndpoint(ctx, mux, endpoint, opts)
 }
+
+func (UnimplementedHelloServer) Name() string {
+	return "HelloServer"
+}
