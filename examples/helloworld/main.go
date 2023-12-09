@@ -26,10 +26,9 @@ func (*HelloServer) SayHello(ctx context.Context, req *api.HelloRequest) (*api.H
 }
 
 func main() {
-	go testServer()
+	srv := server.New(server.Address(":8081"))
+	go testServer(srv)
 
-	// start server with hello server
-	srv := server.New(server.Address(":8001"))
 	if err := srv.ListenAndServe(context.TODO(), &HelloServer{}); err != nil {
 		panic(err)
 	}
@@ -38,11 +37,11 @@ func main() {
 // testServer continuos call the server using both gRPC & HTTP.
 // this is to demonstrate that we can call the server using both protocols
 // without setting up anything else.
-func testServer() {
+func testServer(srv *server.Server) {
 	for {
 		time.Sleep(time.Second)
 		// call hello server using gRPC
-		client := api.NewHelloClient(client.MustDial(context.TODO(), ":8001"))
+		client := api.NewHelloClient(client.MustDial(context.TODO(), srv.Address(), srv.DialOpts()...))
 		res, err := client.SayHello(context.TODO(), &api.HelloRequest{
 			Name: "Jack",
 		})
@@ -53,7 +52,7 @@ func testServer() {
 		log.Info("gRPC response", "message", res.Message)
 
 		// call hello server using HTTP
-		rs, err := http.Post("http://localhost:8001/api/v1/hello", "application/json", strings.NewReader(`{"name":"Jack"}`))
+		rs, err := http.Post("http://"+srv.Address()+"/api/v1/hello", "application/json", strings.NewReader(`{"name":"Jack"}`))
 		if err != nil || rs.StatusCode != http.StatusOK {
 			log.Error("HTTP error", "status", rs.Status, "error", err)
 			continue

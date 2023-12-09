@@ -59,7 +59,7 @@ type (
 
 	// grpcEndpoint implement an endpoint registration interface for service to attach their endpoints to gRPC gateway.
 	grpcEndpoint interface {
-		RegisterWithEndpoint(ctx context.Context, mux *runtime.ServeMux, addr string, opts []grpc.DialOption)
+		RegisterWithEndpoint(ctx context.Context, mux *runtime.ServeMux, addr string, opts []grpc.DialOption) error
 	}
 
 	httpHandler interface {
@@ -93,6 +93,8 @@ func New(opts ...grpc.ServerOption) *Server {
 	return srv
 }
 
+// ListenAndServe start & serving the given services with gracefully shutdown
+// based on context cancelling or system interrupt signals.
 func (srv *Server) ListenAndServe(ctx context.Context, services ...any) error {
 	if err := srv.registerServices(ctx, services...); err != nil {
 		return err
@@ -101,6 +103,26 @@ func (srv *Server) ListenAndServe(ctx context.Context, services ...any) error {
 		return err
 	}
 	return nil
+}
+
+// RegisterService implements grpc.ServiceRegistrar
+func (srv *Server) RegisterService(desc *grpc.ServiceDesc, impl any) {
+	srv.grpcSrv.RegisterService(desc, impl)
+}
+
+// ServeMux return internal server multiplexer.
+func (srv *Server) ServeMux() *runtime.ServeMux {
+	return srv.gw
+}
+
+// DialOpts return dial options for dialling to the server.
+func (srv *Server) DialOpts() []grpc.DialOption {
+	return srv.dialOpts
+}
+
+// Address return address of the server.
+func (srv *Server) Address() string {
+	return srv.addr
 }
 
 func (srv *Server) apply(opts ...grpc.ServerOption) {
@@ -208,7 +230,6 @@ func (srv *Server) shutdown(ctx context.Context) error {
 }
 
 func (srv *Server) registerServices(ctx context.Context, services ...any) error {
-	enableGw := false
 	for _, s := range services {
 		valid := false
 		if h, ok := s.(service); ok {
@@ -219,8 +240,9 @@ func (srv *Server) registerServices(ctx context.Context, services ...any) error 
 			valid = true
 		}
 		if h, ok := s.(grpcEndpoint); ok {
-			enableGw = true
-			h.RegisterWithEndpoint(ctx, srv.gw, srv.addr, srv.dialOpts)
+			if err := h.RegisterWithEndpoint(ctx, srv.gw, srv.addr, srv.dialOpts); err != nil {
+				return err
+			}
 			valid = true
 		}
 		if h, ok := s.(httpHandler); ok {
@@ -241,9 +263,7 @@ func (srv *Server) registerServices(ctx context.Context, services ...any) error 
 		}
 		srv.logger.Log(ctx, slog.LevelInfo, "registered service successfully", "name", name)
 	}
-	if enableGw {
-		srv.router.PathPrefix(srv.apiPathPrefix).Handler(srv.gw)
-	}
+	srv.router.PathPrefix(srv.apiPathPrefix).Handler(srv.gw)
 	return nil
 }
 

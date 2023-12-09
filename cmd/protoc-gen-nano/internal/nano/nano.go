@@ -68,8 +68,8 @@ func (g *nano) generateService(file *generator.FileDescriptor, service *pb.Servi
 
 	if g.gen.GenGW {
 		g.P()
-		g.P("func (", serviceAlias, ") RegisterWithEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption){")
-		g.P("Register" + serviceName + "HandlerFromEndpoint(ctx, mux, endpoint, opts)")
+		g.P("func (", serviceAlias, ") RegisterWithEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) error {")
+		g.P("return Register" + serviceName + "HandlerFromEndpoint(ctx, mux, endpoint, opts)")
 		g.P("}")
 	}
 	g.P()
