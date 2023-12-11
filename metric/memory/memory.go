@@ -3,6 +3,7 @@ package memory
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/pthethanh/nano/metric"
@@ -31,10 +32,11 @@ func (r *Reporter) Gauge(name string, labels ...string) metric.Gauge {
 }
 
 func (r *Reporter) Histogram(name string, buckets []float64, labels ...string) metric.Histogram {
-	if buckets == nil {
-		return newHistogram(name, nil, labels...)
-	}
 	return newHistogram(name, buckets, labels...)
+}
+
+func (r *Reporter) Summary(name string, obj map[float64]float64, age time.Duration, labels ...string) metric.Summary {
+	return newSummary(name, obj, age, labels...)
 }
 
 func (r *Reporter) Named(name string) metric.Reporter {
