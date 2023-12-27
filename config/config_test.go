@@ -39,6 +39,7 @@ func TestReadConfigPath(t *testing.T) {
 	if !cmp.Equal(conf.Server, srv) {
 		t.Errorf("got server=%v, want server=%v", conf.Server, srv)
 	}
+
 }
 
 func TestReadConfigPathWithEnvOpts(t *testing.T) {

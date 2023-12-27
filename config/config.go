@@ -2,6 +2,8 @@ package config
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -127,5 +129,19 @@ func (r *Reader[T]) loadEnv() {
 				r.log.Log(context.Background(), slog.LevelError, "failed to load env file", "name", r.opts.envFiles, "error", err)
 			}
 		}
+	}
+}
+
+func (r *Reader[T]) WriteEnv(w io.Writer) {
+	for _, k := range r.vp.AllKeys() {
+		env := k
+		if r.vp.GetEnvPrefix() != "" {
+			env = r.vp.GetEnvPrefix() + "." + k
+		}
+		for _, rp := range r.opts.envReplacers {
+			env = rp.Replace(env)
+		}
+		env = strings.ToUpper(env) + "=" + r.vp.GetString(k)
+		fmt.Fprintln(w, env)
 	}
 }
