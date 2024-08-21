@@ -6,7 +6,7 @@ require (
 	github.com/IBM/sarama v1.42.1
 	github.com/bytedance/sonic v1.10.2
 	github.com/google/uuid v1.4.0
-	github.com/pthethanh/nano v0.0.4
+	github.com/pthethanh/nano v0.0.1
 )
 
 require (
@@ -37,4 +37,4 @@ require (
 	google.golang.org/protobuf v1.31.0 // indirect
 )
 
-replace github.com/pthethanh/nano v0.0.4 => ../../../
+//replace github.com/pthethanh/nano v0.0.1 => ../../../

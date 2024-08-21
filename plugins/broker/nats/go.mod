@@ -5,7 +5,7 @@ go 1.21.0
 require (
 	github.com/bytedance/sonic v1.12.1
 	github.com/nats-io/nats.go v1.31.0
-	github.com/pthethanh/nano v0.0.3
+	github.com/pthethanh/nano v0.0.1
 )
 
 require (
@@ -23,4 +23,4 @@ require (
 	google.golang.org/protobuf v1.34.2 // indirect
 )
 
-replace github.com/pthethanh/nano v0.0.3 => ../../../
+//replace github.com/pthethanh/nano v0.0.1 => ../../../

@@ -4,8 +4,8 @@ go 1.21.0
 
 require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0
-	github.com/pthethanh/nano v0.0.2
-	github.com/pthethanh/nano/cmd/protoc-gen-nano v0.0.2
+	github.com/pthethanh/nano v0.0.1
+	github.com/pthethanh/nano/cmd/protoc-gen-nano v0.0.1
 	google.golang.org/genproto/googleapis/api v0.0.0-20240820151423-278611b39280
 	google.golang.org/grpc v1.65.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.3.0
@@ -25,6 +25,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/pthethanh/nano v0.0.2 => ./../../
+//replace github.com/pthethanh/nano v0.0.1 => ./../../
 
-replace github.com/pthethanh/nano/cmd/protoc-gen-nano v0.0.2 => ./../../cmd/protoc-gen-nano/
+//replace github.com/pthethanh/nano/cmd/protoc-gen-nano v0.0.1 => ./../../cmd/protoc-gen-nano/

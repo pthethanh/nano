@@ -15,4 +15,4 @@ require (
 	golang.org/x/sys v0.24.0 // indirect
 )
 
-replace github.com/pthethanh/nano v0.0.1 => ./../../../
+//replace github.com/pthethanh/nano v0.0.1 => ./../../../

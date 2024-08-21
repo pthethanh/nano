@@ -415,6 +415,9 @@ github.com/pkg/diff v0.0.0-20210226163009-20ebb0f2a09e/go.mod h1:pJLUxLENpZxwdsK
 github.com/pkg/sftp v1.13.6/go.mod h1:tz1ryNURKu77RL+GuCzmoJYxQczL3wLNNpPWagdg4Qk=
 github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:xMI15A0UPsDsEKsMN9yxemIoYk6Tm2C1GtYGdfGttqA=
 github.com/prometheus/client_model v0.4.0/go.mod h1:oMQmHW1/JoDwqLtg57MGgP/Fb1CJEYF2imWWhWtMkYU=
+github.com/pthethanh/nano v0.0.1/go.mod h1:Z5oE48r8PJyDPRTlZi/gugE0tpQvO3sGkIKMC3xzZaM=
+github.com/pthethanh/nano v0.0.4/go.mod h1:Z5oE48r8PJyDPRTlZi/gugE0tpQvO3sGkIKMC3xzZaM=
+github.com/pthethanh/nano/cmd/protoc-gen-nano v0.0.1/go.mod h1:MIDd73PSIXBODLg5tBgyvZYA4zSLIo/25rXRZclYSes=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/rogpeppe/go-internal v1.9.0/go.mod h1:WtVeX8xhTBvf0smdhujwtBcq4Qrzq/fJaraNFVN+nFs=
 github.com/sagikazarmark/crypt v0.15.0/go.mod h1:5rwNNax6Mlk9sZ40AcyVtiEw24Z4J04cfSioF2COKmc=
