@@ -1,4 +1,4 @@
-module github.com/pthethanh/nano/plugins/brokers/kafka
+module github.com/pthethanh/nano/plugins/broker/kafka
 
 go 1.21.0
 
