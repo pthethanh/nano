@@ -7,13 +7,13 @@ import (
 
 type (
 	// Broker is an interface used for asynchronous messaging.
-	Broker interface {
+	Broker[T any] interface {
 		// Open establish connection to the target server.
 		Open(ctx context.Context) error
 		// Publish publish the message to the target topic.
-		Publish(ctx context.Context, topic string, m *Message, opts ...PublishOption) error
+		Publish(ctx context.Context, topic string, m *T, opts ...PublishOption[T]) error
 		// Subscribe subscribe to the topic to consume messages.
-		Subscribe(ctx context.Context, topic string, h Handler, opts ...SubscribeOption) (Subscriber, error)
+		Subscribe(ctx context.Context, topic string, h func(Event[T]) error, opts ...SubscribeOption[T]) (Subscriber[T], error)
 		// Close flush all in-flight messages and close underlying connection.
 		// Close allows a context to control the duration
 		// of a flush/close call. This context should be non-nil.
@@ -21,15 +21,10 @@ type (
 		Close(context.Context) error
 	}
 
-	// Handler is used to process messages via a subscription of a topic.
-	// The handler is passed a publication interface which contains the
-	// message and optional Ack method to acknowledge receipt of the message.
-	Handler = func(Event) error
-
 	// Event is given to a subscription handler for processing
-	Event interface {
+	Event[T any] interface {
 		Topic() string
-		Message() *Message
+		Message() *T
 		Ack() error
 		Error() error
 		Reason() Reason
@@ -38,7 +33,7 @@ type (
 	Reason int
 
 	// Subscriber is a convenience return type for the Subscribe method
-	Subscriber interface {
+	Subscriber[T any] interface {
 		Topic() string
 		Unsubscribe() error
 	}

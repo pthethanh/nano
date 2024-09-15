@@ -11,9 +11,9 @@ import (
 )
 
 type (
-	event struct {
+	event[T any] struct {
 		t      string
-		m      *broker.Message
+		m      *T
 		msg    *nats.Msg
 		err    error
 		reason broker.Reason
@@ -46,23 +46,23 @@ func (m JSONCodec) Unmarshal(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
 
-func (e *event) Topic() string {
+func (e *event[T]) Topic() string {
 	return e.t
 }
 
-func (e *event) Message() *broker.Message {
+func (e *event[T]) Message() *T {
 	return e.m
 }
 
-func (e *event) Ack() error {
+func (e *event[T]) Ack() error {
 	return e.msg.Ack()
 }
 
-func (e *event) Error() error {
+func (e *event[T]) Error() error {
 	return e.err
 }
 
-func (e *event) Reason() broker.Reason {
+func (e *event[T]) Reason() broker.Reason {
 	return e.reason
 }
 

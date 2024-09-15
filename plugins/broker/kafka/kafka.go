@@ -11,14 +11,14 @@ import (
 	"github.com/pthethanh/nano/broker"
 )
 
-type Broker struct {
+type Broker[T any] struct {
 	addrs            []string
 	conf             *sarama.Config
 	codec            codec
 	log              logger
 	async            bool
 	onPublishFailure func(*PublishError)
-	onPublishSuccess func(*broker.Message)
+	onPublishSuccess func(*T)
 
 	client         sarama.Client
 	syncProducer   sarama.SyncProducer
@@ -29,11 +29,11 @@ type Broker struct {
 }
 
 var (
-	_ broker.Broker = (*Broker)(nil)
+	_ broker.Broker[any] = (*Broker[any])(nil)
 )
 
-func New(opts ...Option) *Broker {
-	k := &Broker{
+func New[T any](opts ...Option[T]) *Broker[T] {
+	k := &Broker[T]{
 		conf:  sarama.NewConfig(),
 		log:   slog.Default(),
 		codec: JSONCodec{},
@@ -45,7 +45,7 @@ func New(opts ...Option) *Broker {
 	return k
 }
 
-func (k *Broker) Open(context.Context) error {
+func (k *Broker[T]) Open(context.Context) error {
 	if k.connected {
 		return nil
 	}
@@ -90,7 +90,7 @@ func (k *Broker) Open(context.Context) error {
 				if k.onPublishSuccess != nil {
 					f = func(pm *sarama.ProducerMessage) {
 						if pm.Metadata != nil {
-							if msg, ok := pm.Metadata.(*broker.Message); ok {
+							if msg, ok := pm.Metadata.(*T); ok {
 								k.onPublishSuccess(msg)
 							}
 						}
@@ -124,7 +124,7 @@ func (k *Broker) Open(context.Context) error {
 	return nil
 }
 
-func (k *Broker) Publish(ctx context.Context, topic string, msg *broker.Message, opts ...broker.PublishOption) error {
+func (k *Broker[T]) Publish(ctx context.Context, topic string, msg *T, opts ...broker.PublishOption[T]) error {
 	b, err := k.codec.Marshal(msg)
 	if err != nil {
 		return err
@@ -143,8 +143,8 @@ func (k *Broker) Publish(ctx context.Context, topic string, msg *broker.Message,
 	}
 }
 
-func (k *Broker) Subscribe(ctx context.Context, topic string, handler broker.Handler, opts ...broker.SubscribeOption) (broker.Subscriber, error) {
-	opt := broker.SubscribeOptions{
+func (k *Broker[T]) Subscribe(ctx context.Context, topic string, handler func(broker.Event[T]) error, opts ...broker.SubscribeOption[T]) (broker.Subscriber[T], error) {
+	opt := broker.SubscribeOptions[T]{
 		AutoAck: true,
 		Queue:   uuid.New().String(),
 	}
@@ -153,7 +153,7 @@ func (k *Broker) Subscribe(ctx context.Context, topic string, handler broker.Han
 	if err != nil {
 		return nil, err
 	}
-	consumerHandler := &consumerGroupHandler{
+	consumerHandler := &consumerGroupHandler[T]{
 		handler:  handler,
 		opts:     opt,
 		codec:    k.codec,
@@ -166,7 +166,7 @@ func (k *Broker) Subscribe(ctx context.Context, topic string, handler broker.Han
 			select {
 			case err := <-consumer.Errors():
 				if err != nil {
-					handler(&event{
+					handler(&event[T]{
 						err:    err,
 						reason: broker.ReasonSubscriptionFailure,
 					})
@@ -179,7 +179,7 @@ func (k *Broker) Subscribe(ctx context.Context, topic string, handler broker.Han
 				case sarama.ErrClosedConsumerGroup:
 					return
 				default:
-					handler(&event{
+					handler(&event[T]{
 						err:    err,
 						reason: broker.ReasonSubscriptionFailure,
 					})
@@ -188,7 +188,7 @@ func (k *Broker) Subscribe(ctx context.Context, topic string, handler broker.Han
 		}
 	}()
 	k.log.Log(ctx, slog.LevelInfo, "subscribed successfully", "topic", topic, "queue", opt.Queue)
-	return &subscriber{
+	return &subscriber[T]{
 		broker:   k,
 		consumer: consumer,
 		opts:     opt,
@@ -196,7 +196,7 @@ func (k *Broker) Subscribe(ctx context.Context, topic string, handler broker.Han
 	}, nil
 }
 
-func (k *Broker) newConsumerGroup(groupID string) (sarama.ConsumerGroup, error) {
+func (k *Broker[T]) newConsumerGroup(groupID string) (sarama.ConsumerGroup, error) {
 	cg, err := sarama.NewConsumerGroup(k.addrs, groupID, k.conf)
 	if err != nil {
 		return nil, err
@@ -207,11 +207,11 @@ func (k *Broker) newConsumerGroup(groupID string) (sarama.ConsumerGroup, error) 
 	return cg, nil
 }
 
-func (k *Broker) String() string {
+func (k *Broker[T]) String() string {
 	return "kafka"
 }
 
-func (k *Broker) Close(ctx context.Context) error {
+func (k *Broker[T]) Close(ctx context.Context) error {
 	k.log.Log(ctx, slog.LevelInfo, "closing")
 	k.mu.Lock()
 	defer k.mu.Unlock()

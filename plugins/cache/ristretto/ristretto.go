@@ -20,7 +20,7 @@ type (
 
 var (
 	// Cacher should implements cache.Cacher
-	c cache.Cacher = &Cacher[string, []byte]{}
+	c cache.Cacher[string, []byte] = &Cacher[string, []byte]{}
 )
 
 func New[K comparable, V any](conf *Config) *Cacher[K, V] {
@@ -55,11 +55,11 @@ func (c *Cacher[K, V]) Get(ctx context.Context, k K) (rs V, err error) {
 }
 
 // Set a value
-func (c *Cacher[K, V]) Set(ctx context.Context, k K, v V, opts ...cache.SetOption) error {
+func (c *Cacher[K, V]) Set(ctx context.Context, k K, v V, opts ...cache.SetOption[K, V]) error {
 	if err := c.validate(); err != nil {
 		return err
 	}
-	setOpts := &cache.SetOptions{}
+	setOpts := &cache.SetOptions[K, V]{}
 	setOpts.Apply(opts...)
 	if setOpts.TTL > 0 {
 		c.cache.SetWithTTL(k, v, 1, setOpts.TTL)

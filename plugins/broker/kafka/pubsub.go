@@ -5,53 +5,53 @@ import (
 	"github.com/pthethanh/nano/broker"
 )
 
-type subscriber struct {
-	broker   *Broker
+type subscriber[T any] struct {
+	broker   *Broker[T]
 	consumer sarama.ConsumerGroup
 	t        string
-	opts     broker.SubscribeOptions
+	opts     broker.SubscribeOptions[T]
 }
 
-type event struct {
+type event[T any] struct {
 	topic    string
 	err      error
 	consumer sarama.ConsumerGroup
 	msg      *sarama.ConsumerMessage
-	m        *broker.Message
+	m        *T
 	session  sarama.ConsumerGroupSession
 	reason   broker.Reason
 }
 
-func (p *event) Topic() string {
+func (p *event[T]) Topic() string {
 	return p.topic
 }
 
-func (p *event) Message() *broker.Message {
+func (p *event[T]) Message() *T {
 	return p.m
 }
 
-func (p *event) Ack() error {
+func (p *event[T]) Ack() error {
 	p.session.MarkMessage(p.msg, "")
 	return nil
 }
 
-func (p *event) Error() error {
+func (p *event[T]) Error() error {
 	return p.err
 }
 
-func (p *event) Reason() broker.Reason {
+func (p *event[T]) Reason() broker.Reason {
 	return p.reason
 }
 
-func (s *subscriber) Options() broker.SubscribeOptions {
+func (s *subscriber[T]) Options() broker.SubscribeOptions[T] {
 	return s.opts
 }
 
-func (s *subscriber) Topic() string {
+func (s *subscriber[T]) Topic() string {
 	return s.t
 }
 
-func (s *subscriber) Unsubscribe() error {
+func (s *subscriber[T]) Unsubscribe() error {
 	if err := s.consumer.Close(); err != nil {
 		return err
 	}

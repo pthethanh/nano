@@ -1,82 +1,96 @@
+// Package memory provides a cache service using in-memory implementation of dgraph-io/ristretto.
 package memory
 
 import (
 	"context"
-	"errors"
 
-	"github.com/coocood/freecache"
+	"github.com/dgraph-io/ristretto"
 	"github.com/pthethanh/nano/cache"
 )
 
 type (
-	// Memory is an implementation of cache.Cacher
-	Memory struct {
-		cache *freecache.Cache
+	// Cacher is an in-memory cache implementation using dgraph-io/ristretto cache.
+	Cacher[K comparable, V any] struct {
+		conf  *ristretto.Config
+		cache *ristretto.Cache
 	}
 
-	Option func(*Memory)
+	Config = ristretto.Config
 )
 
 var (
-	_ cache.Cacher = (*Memory)(nil)
-
-	// ErrInvalidConnectionState indicate that the connection has not been opened properly.
-	ErrInvalidConnectionState = errors.New("invalid connection state")
+	// Cacher should implements cache.Cacher
+	_ cache.Cacher[string, []byte] = &Cacher[string, []byte]{}
 )
 
-// New return new memory cache.
-func New(size int) *Memory {
-	m := &Memory{
-		cache: freecache.NewCache(size),
+func New[K comparable, V any](conf *Config) *Cacher[K, V] {
+	return &Cacher[K, V]{
+		conf: conf,
 	}
-	return m
 }
 
-// Get a value.
-func (m *Memory) Get(ctx context.Context, key string) ([]byte, error) {
-	b, err := m.cache.Get([]byte(key))
-	if errors.Is(err, freecache.ErrNotFound) {
-		return nil, cache.ErrNotFound
-	}
+// Open establish connection to the target server.
+func (c *Cacher[K, V]) Open(ctx context.Context) error {
+	rc, err := ristretto.NewCache(c.conf)
 	if err != nil {
-		return nil, err
-	}
-	return b, nil
-}
-
-// Set a value.
-func (m *Memory) Set(ctx context.Context, key string, val []byte, opts ...cache.SetOption) error {
-	opt := &cache.SetOptions{}
-	opt.Apply(opts...)
-	ttl := opt.TTL.Seconds()
-	if ttl < 1 && ttl > 0 {
-		ttl = 1 // at least 1 sec if defined.
-	}
-	if err := m.cache.Set([]byte(key), val, int(ttl)); err != nil {
 		return err
 	}
+	c.cache = rc
 	return nil
 }
 
-// Delete a value.
-func (m *Memory) Delete(ctx context.Context, key string) error {
-	m.cache.Del([]byte(key))
+// Get a value, return ErrNotFound if key not found.
+func (c *Cacher[K, V]) Get(ctx context.Context, k K) (rs V, err error) {
+	if err := c.validate(); err != nil {
+		return rs, err
+	}
+	v, ok := c.cache.Get(k)
+	if !ok {
+		return rs, cache.ErrNotFound
+	}
+	if vv, ok := v.(V); ok {
+		return vv, nil
+	}
+	return rs, cache.ErrNotFound
+}
+
+// Set a value
+func (c *Cacher[K, V]) Set(ctx context.Context, k K, v V, opts ...cache.SetOption[K, V]) error {
+	if err := c.validate(); err != nil {
+		return err
+	}
+	setOpts := &cache.SetOptions[K, V]{}
+	setOpts.Apply(opts...)
+	if setOpts.TTL > 0 {
+		c.cache.SetWithTTL(k, v, 1, setOpts.TTL)
+	} else {
+		c.cache.Set(k, v, 1)
+	}
+	c.cache.Wait()
 	return nil
 }
 
-// Open make the cacher ready for using.
-func (m *Memory) Open(ctx context.Context) error {
-	// nothing to do
+// Delete a value
+func (c *Cacher[K, V]) Delete(ctx context.Context, k K) error {
+	if err := c.validate(); err != nil {
+		return err
+	}
+	c.cache.Del(k)
 	return nil
 }
 
-// Close close underlying resources.
-func (m *Memory) Close(ctx context.Context) error {
-	m.cache.Clear()
+// Close close the underlying connection.
+func (c *Cacher[K, V]) Close(ctx context.Context) error {
+	if err := c.validate(); err != nil {
+		return nil
+	}
+	c.cache.Close()
 	return nil
 }
 
-// CheckHealth return health check func.
-func (m *Memory) CheckHealth(ctx context.Context) error {
+func (c *Cacher[K, V]) validate() error {
+	if c.cache == nil {
+		return cache.ErrInValidConnState
+	}
 	return nil
 }

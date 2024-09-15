@@ -12,7 +12,7 @@ import (
 
 type (
 	// Nats is an implementation of broker.Broker using NATS.
-	Nats struct {
+	Nats[T any] struct {
 		conn *nats.Conn
 		opts []nats.Option
 		log  logger
@@ -22,16 +22,16 @@ type (
 	}
 
 	// Option is an optional configuration.
-	Option func(*Nats)
+	Option[T any] func(*Nats[T])
 )
 
 var (
-	_ broker.Broker = (*Nats)(nil)
+	_ broker.Broker[any] = (*Nats[any])(nil)
 )
 
 // New return a new NATs message broker.
-func New(opts ...Option) *Nats {
-	n := &Nats{
+func New[T any](opts ...Option[T]) *Nats[T] {
+	n := &Nats[T]{
 		log:   slog.Default(),
 		codec: JSONCodec{},
 		addrs: "127.0.0.1:4222",
@@ -44,7 +44,7 @@ func New(opts ...Option) *Nats {
 }
 
 // Open connect to target server.
-func (n *Nats) Open(ctx context.Context) error {
+func (n *Nats[T]) Open(ctx context.Context) error {
 	conn, err := nats.Connect(n.addrs, n.opts...)
 	if err != nil {
 		return err
@@ -54,7 +54,7 @@ func (n *Nats) Open(ctx context.Context) error {
 }
 
 // Publish implements broker.Broker interface.
-func (n *Nats) Publish(ctx context.Context, topic string, m *broker.Message, opts ...broker.PublishOption) error {
+func (n *Nats[T]) Publish(ctx context.Context, topic string, m *T, opts ...broker.PublishOption[T]) error {
 	b, err := n.codec.Marshal(m)
 	if err != nil {
 		return err
@@ -63,15 +63,15 @@ func (n *Nats) Publish(ctx context.Context, topic string, m *broker.Message, opt
 }
 
 // Subscribe implements broker.Broker interface.
-func (n *Nats) Subscribe(ctx context.Context, topic string, h broker.Handler, opts ...broker.SubscribeOption) (broker.Subscriber, error) {
-	op := &broker.SubscribeOptions{
+func (n *Nats[T]) Subscribe(ctx context.Context, topic string, h func(broker.Event[T]) error, opts ...broker.SubscribeOption[T]) (broker.Subscriber[T], error) {
+	op := &broker.SubscribeOptions[T]{
 		AutoAck: true,
 	}
 	op.Apply(opts...)
 	msgHandler := func(msg *nats.Msg) {
-		m := broker.Message{}
+		var m T
 		if err := n.codec.Unmarshal(msg.Data, &m); err != nil {
-			h(&event{
+			h(&event[T]{
 				t:      topic,
 				m:      &m,
 				msg:    msg,
@@ -80,7 +80,7 @@ func (n *Nats) Subscribe(ctx context.Context, topic string, h broker.Handler, op
 			})
 			return
 		}
-		h(&event{
+		h(&event[T]{
 			t:   topic,
 			m:   &m,
 			msg: msg,
@@ -107,7 +107,7 @@ func (n *Nats) Subscribe(ctx context.Context, topic string, h broker.Handler, op
 }
 
 // CheckHealth implements health.Checker.
-func (n *Nats) CheckHealth(ctx context.Context) error {
+func (n *Nats[T]) CheckHealth(ctx context.Context) error {
 	if !n.conn.IsConnected() {
 		return fmt.Errorf("nats: server status=%d", n.conn.Status())
 	}
@@ -115,7 +115,7 @@ func (n *Nats) CheckHealth(ctx context.Context) error {
 }
 
 // Close flush in-flight messages and close the underlying connection.
-func (n *Nats) Close(ctx context.Context) error {
+func (n *Nats[T]) Close(ctx context.Context) error {
 	err := n.conn.FlushWithContext(ctx)
 	if err != nil {
 		return err

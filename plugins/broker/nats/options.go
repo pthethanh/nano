@@ -5,30 +5,30 @@ import (
 )
 
 // Codec is an option to provide a custom codec.
-func Codec(codec codec) Option {
-	return func(opts *Nats) {
+func Codec[T any](codec codec) Option[T] {
+	return func(opts *Nats[T]) {
 		opts.codec = codec
 	}
 }
 
 // Address is an option to set target addresses of NATS server.
 // Multiple addresses are separated by comma.
-func Address(addrs string) Option {
-	return func(opts *Nats) {
+func Address[T any](addrs string) Option[T] {
+	return func(opts *Nats[T]) {
 		opts.addrs = addrs
 	}
 }
 
 // Options is an option to provide additional nats.Option.
-func Options(opts ...nats.Option) Option {
-	return func(n *Nats) {
+func Options[T any](opts ...nats.Option) Option[T] {
+	return func(n *Nats[T]) {
 		n.opts = append(n.opts, opts...)
 	}
 }
 
 // Logger is an option to provide custom logger.
-func Logger(logger logger) Option {
-	return func(opts *Nats) {
+func Logger[T any](logger logger) Option[T] {
+	return func(opts *Nats[T]) {
 		opts.log = logger
 	}
 }

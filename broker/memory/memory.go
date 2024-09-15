@@ -14,8 +14,8 @@ import (
 
 type (
 	// Broker is a memory message broker.
-	Broker struct {
-		subs   map[string][]*subscriber
+	Broker[T any] struct {
+		subs   map[string][]*subscriber[T]
 		mu     *sync.RWMutex
 		ch     chan func() error
 		worker int
@@ -24,36 +24,36 @@ type (
 		opened bool
 	}
 
-	subscriber struct {
+	subscriber[T any] struct {
 		id     string
 		t      string
-		h      broker.Handler
-		opts   *broker.SubscribeOptions
+		h      func(broker.Event[T]) error
+		opts   *broker.SubscribeOptions[T]
 		close  func()
 		closed int32
 	}
 
-	event struct {
+	event[T any] struct {
 		t      string
-		msg    *broker.Message
+		msg    *T
 		err    error
 		reason broker.Reason
 	}
 
-	Option func(*Broker)
+	Option[T any] func(*Broker[T])
 )
 
 var (
-	_ broker.Broker = (*Broker)(nil)
+	_ broker.Broker[any] = (*Broker[any])(nil)
 
 	// ErrInvalidConnectionState indicate that the connection has not been opened properly.
 	ErrInvalidConnectionState = errors.New("invalid connection state")
 )
 
 // New return new memory broker.
-func New(opts ...Option) *Broker {
-	br := &Broker{
-		subs:   make(map[string][]*subscriber),
+func New[T any](opts ...Option[T]) *Broker[T] {
+	br := &Broker[T]{
+		subs:   make(map[string][]*subscriber[T]),
 		mu:     &sync.RWMutex{},
 		worker: 100,
 		buf:    10_000,
@@ -66,33 +66,33 @@ func New(opts ...Option) *Broker {
 	return br
 }
 
-func (env *event) Topic() string {
+func (env *event[T]) Topic() string {
 	return env.t
 }
 
-func (env *event) Message() *broker.Message {
+func (env *event[T]) Message() *T {
 	return env.msg
 }
 
-func (env *event) Ack() error {
+func (env *event[T]) Ack() error {
 	return nil
 }
 
-func (env *event) Error() error {
+func (env *event[T]) Error() error {
 	return env.err
 }
 
-func (env *event) Reason() broker.Reason {
+func (env *event[T]) Reason() broker.Reason {
 	return env.reason
 }
 
 // Topic implements broker.Subscriber interface.
-func (sub *subscriber) Topic() string {
+func (sub *subscriber[T]) Topic() string {
 	return sub.t
 }
 
 // Unsubscribe implements broker.Subscriber interface.
-func (sub *subscriber) Unsubscribe() error {
+func (sub *subscriber[T]) Unsubscribe() error {
 	if atomic.AddInt32(&sub.closed, 1) > 1 {
 		return nil
 	}
@@ -101,7 +101,7 @@ func (sub *subscriber) Unsubscribe() error {
 }
 
 // Open implements broker.Broker interface.
-func (br *Broker) Open(ctx context.Context) error {
+func (br *Broker[T]) Open(ctx context.Context) error {
 	wg := sync.WaitGroup{}
 	wg.Add(br.worker)
 	br.wg.Add(br.worker)
@@ -120,7 +120,7 @@ func (br *Broker) Open(ctx context.Context) error {
 }
 
 // Publish implements broker.Broker interface.
-func (br *Broker) Publish(ctx context.Context, topic string, m *broker.Message, opts ...broker.PublishOption) error {
+func (br *Broker[T]) Publish(ctx context.Context, topic string, m *T, opts ...broker.PublishOption[T]) error {
 	if !br.opened {
 		return ErrInvalidConnectionState
 	}
@@ -128,8 +128,8 @@ func (br *Broker) Publish(ctx context.Context, topic string, m *broker.Message, 
 	subs := br.subs[topic]
 	br.mu.RUnlock()
 	// queue, list of sub
-	queueSubs := make(map[string][]*subscriber)
-	env := &event{
+	queueSubs := make(map[string][]*subscriber[T])
+	env := &event[T]{
 		t:   topic,
 		msg: m,
 	}
@@ -152,13 +152,13 @@ func (br *Broker) Publish(ctx context.Context, topic string, m *broker.Message, 
 }
 
 // Subscribe implements broker.Broker interface.
-func (br *Broker) Subscribe(ctx context.Context, topic string, h broker.Handler, opts ...broker.SubscribeOption) (broker.Subscriber, error) {
+func (br *Broker[T]) Subscribe(ctx context.Context, topic string, h func(broker.Event[T]) error, opts ...broker.SubscribeOption[T]) (broker.Subscriber[T], error) {
 	if !br.opened {
 		return nil, ErrInvalidConnectionState
 	}
-	subOpts := &broker.SubscribeOptions{}
+	subOpts := &broker.SubscribeOptions[T]{}
 	subOpts.Apply(opts...)
-	newSub := &subscriber{
+	newSub := &subscriber[T]{
 		id:   uuid.New().String(),
 		t:    topic,
 		h:    h,
@@ -169,7 +169,7 @@ func (br *Broker) Subscribe(ctx context.Context, topic string, h broker.Handler,
 		defer br.mu.Unlock()
 		subs := br.subs[topic]
 		// remove the sub
-		newSubs := make([]*subscriber, 0)
+		newSubs := make([]*subscriber[T], 0)
 		for _, sub := range subs {
 			if newSub.id == sub.id {
 				continue
@@ -185,7 +185,7 @@ func (br *Broker) Subscribe(ctx context.Context, topic string, h broker.Handler,
 }
 
 // CheckHealth implements health.Checker interface.
-func (br *Broker) CheckHealth(ctx context.Context) error {
+func (br *Broker[T]) CheckHealth(ctx context.Context) error {
 	if !br.opened {
 		return ErrInvalidConnectionState
 	}
@@ -193,7 +193,7 @@ func (br *Broker) CheckHealth(ctx context.Context) error {
 }
 
 // Close implements broker.Broker interface.
-func (br *Broker) Close(ctx context.Context) error {
+func (br *Broker[T]) Close(ctx context.Context) error {
 	br.opened = false
 	close(br.ch)
 	br.wg.Wait()
