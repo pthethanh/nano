@@ -1,12 +1,12 @@
-go 1.21.0
+go 1.23.1
 
 use .
 
 use ./cmd/protoc-gen-nano
 
-use ./plugins/cache/ristretto
-
 use ./examples/helloworld
+
+use ./examples/kafka
 
 use ./plugins/broker/nats
 

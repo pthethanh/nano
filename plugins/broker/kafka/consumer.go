@@ -8,7 +8,7 @@ import (
 // consumerGroupHandler is the implementation of sarama.ConsumerGroupHandler.
 type consumerGroupHandler[T any] struct {
 	handler  func(broker.Event[T]) error
-	opts     broker.SubscribeOptions[T]
+	opts     broker.SubscribeOptions
 	codec    codec
 	log      logger
 	consumer sarama.ConsumerGroup

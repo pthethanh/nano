@@ -124,7 +124,7 @@ func (k *Broker[T]) Open(context.Context) error {
 	return nil
 }
 
-func (k *Broker[T]) Publish(ctx context.Context, topic string, msg *T, opts ...broker.PublishOption[T]) error {
+func (k *Broker[T]) Publish(ctx context.Context, topic string, msg *T, opts ...broker.PublishOption) error {
 	b, err := k.codec.Marshal(msg)
 	if err != nil {
 		return err
@@ -143,8 +143,8 @@ func (k *Broker[T]) Publish(ctx context.Context, topic string, msg *T, opts ...b
 	}
 }
 
-func (k *Broker[T]) Subscribe(ctx context.Context, topic string, handler func(broker.Event[T]) error, opts ...broker.SubscribeOption[T]) (broker.Subscriber[T], error) {
-	opt := broker.SubscribeOptions[T]{
+func (k *Broker[T]) Subscribe(ctx context.Context, topic string, handler func(broker.Event[T]) error, opts ...broker.SubscribeOption) (broker.Subscriber, error) {
+	opt := broker.SubscribeOptions{
 		AutoAck: true,
 		Queue:   uuid.New().String(),
 	}

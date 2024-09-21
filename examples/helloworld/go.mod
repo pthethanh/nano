@@ -1,6 +1,6 @@
 module github.com/pthethanh/nano/examples/helloworld
 
-go 1.21.0
+go 1.23.1
 
 require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0

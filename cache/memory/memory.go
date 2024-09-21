@@ -4,18 +4,15 @@ package memory
 import (
 	"context"
 
-	"github.com/dgraph-io/ristretto"
+	"github.com/jellydator/ttlcache/v3"
 	"github.com/pthethanh/nano/cache"
 )
 
 type (
-	// Cacher is an in-memory cache implementation using dgraph-io/ristretto cache.
+	// Cacher is an in-memory cache implementation.
 	Cacher[K comparable, V any] struct {
-		conf  *ristretto.Config
-		cache *ristretto.Cache
+		cache *ttlcache.Cache[K, V]
 	}
-
-	Config = ristretto.Config
 )
 
 var (
@@ -23,19 +20,15 @@ var (
 	_ cache.Cacher[string, []byte] = &Cacher[string, []byte]{}
 )
 
-func New[K comparable, V any](conf *Config) *Cacher[K, V] {
+func New[K comparable, V any](opts ...ttlcache.Option[K, V]) *Cacher[K, V] {
 	return &Cacher[K, V]{
-		conf: conf,
+		cache: ttlcache.New[K, V](opts...),
 	}
 }
 
 // Open establish connection to the target server.
 func (c *Cacher[K, V]) Open(ctx context.Context) error {
-	rc, err := ristretto.NewCache(c.conf)
-	if err != nil {
-		return err
-	}
-	c.cache = rc
+	go c.cache.Start()
 	return nil
 }
 
@@ -44,29 +37,24 @@ func (c *Cacher[K, V]) Get(ctx context.Context, k K) (rs V, err error) {
 	if err := c.validate(); err != nil {
 		return rs, err
 	}
-	v, ok := c.cache.Get(k)
-	if !ok {
-		return rs, cache.ErrNotFound
-	}
-	if vv, ok := v.(V); ok {
-		return vv, nil
+	if item := c.cache.Get(k); item != nil {
+		return item.Value(), nil
 	}
 	return rs, cache.ErrNotFound
 }
 
 // Set a value
-func (c *Cacher[K, V]) Set(ctx context.Context, k K, v V, opts ...cache.SetOption[K, V]) error {
+func (c *Cacher[K, V]) Set(ctx context.Context, k K, v V, opts ...cache.SetOption) error {
 	if err := c.validate(); err != nil {
 		return err
 	}
-	setOpts := &cache.SetOptions[K, V]{}
+	setOpts := &cache.SetOptions{}
 	setOpts.Apply(opts...)
 	if setOpts.TTL > 0 {
-		c.cache.SetWithTTL(k, v, 1, setOpts.TTL)
+		c.cache.Set(k, v, setOpts.TTL)
 	} else {
-		c.cache.Set(k, v, 1)
+		c.cache.Set(k, v, ttlcache.NoTTL)
 	}
-	c.cache.Wait()
 	return nil
 }
 
@@ -75,7 +63,7 @@ func (c *Cacher[K, V]) Delete(ctx context.Context, k K) error {
 	if err := c.validate(); err != nil {
 		return err
 	}
-	c.cache.Del(k)
+	c.cache.Delete(k)
 	return nil
 }
 
@@ -84,7 +72,8 @@ func (c *Cacher[K, V]) Close(ctx context.Context) error {
 	if err := c.validate(); err != nil {
 		return nil
 	}
-	c.cache.Close()
+	c.cache.Stop()
+	c.cache.DeleteAll()
 	return nil
 }
 

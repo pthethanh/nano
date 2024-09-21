@@ -12,7 +12,7 @@ func UnsafeHashOf[T comparable]() func(seed maphash.Seed, v T) uint64 {
 	}
 }
 
-// internal/abi/type.go -> Type
+// https://github.com/golang/go/blob/master/src/internal/abi/type.go#L20
 type abiType struct {
 	Size_       uintptr
 	PtrBytes    uintptr // number of (prefix) bytes in the type that can contain pointers
@@ -32,7 +32,7 @@ type abiType struct {
 	PtrToThis int32 // type for pointer to this type, may be zero
 }
 
-// internal/abi/type.go -> MapType
+// https://github.com/golang/go/blob/master/src/internal/abi/map_swiss.go#L25
 type abiMapType[T comparable] struct {
 	abiType
 	Key    *abiType

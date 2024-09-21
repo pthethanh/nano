@@ -32,7 +32,6 @@ mod_tidy:
 
 build_plugins:
 	$(MAKE) -C  cmd/protoc-gen-nano
-	$(MAKE) -C  plugins/cache/ristretto
 	$(MAKE) -C  plugins/broker/nats
 	$(MAKE) -C  examples/helloworld
 

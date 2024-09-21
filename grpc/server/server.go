@@ -22,9 +22,8 @@ import (
 
 type (
 	Server struct {
-		addr     string
-		logger   logger
-		services []any
+		addr   string
+		logger logger
 
 		// grpc
 		lis             net.Listener

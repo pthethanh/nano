@@ -11,9 +11,9 @@ type (
 		// Open establish connection to the target server.
 		Open(ctx context.Context) error
 		// Publish publish the message to the target topic.
-		Publish(ctx context.Context, topic string, m *T, opts ...PublishOption[T]) error
+		Publish(ctx context.Context, topic string, m *T, opts ...PublishOption) error
 		// Subscribe subscribe to the topic to consume messages.
-		Subscribe(ctx context.Context, topic string, h func(Event[T]) error, opts ...SubscribeOption[T]) (Subscriber[T], error)
+		Subscribe(ctx context.Context, topic string, h func(Event[T]) error, opts ...SubscribeOption) (Subscriber, error)
 		// Close flush all in-flight messages and close underlying connection.
 		// Close allows a context to control the duration
 		// of a flush/close call. This context should be non-nil.
@@ -33,7 +33,7 @@ type (
 	Reason int
 
 	// Subscriber is a convenience return type for the Subscribe method
-	Subscriber[T any] interface {
+	Subscriber interface {
 		Topic() string
 		Unsubscribe() error
 	}

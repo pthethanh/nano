@@ -1,6 +1,6 @@
 module github.com/pthethanh/nano/plugins/broker/nats
 
-go 1.21.0
+go 1.23.1
 
 require (
 	github.com/bytedance/sonic v1.12.1

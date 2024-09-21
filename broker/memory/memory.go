@@ -28,7 +28,7 @@ type (
 		id     string
 		t      string
 		h      func(broker.Event[T]) error
-		opts   *broker.SubscribeOptions[T]
+		opts   *broker.SubscribeOptions
 		close  func()
 		closed int32
 	}
@@ -120,7 +120,7 @@ func (br *Broker[T]) Open(ctx context.Context) error {
 }
 
 // Publish implements broker.Broker interface.
-func (br *Broker[T]) Publish(ctx context.Context, topic string, m *T, opts ...broker.PublishOption[T]) error {
+func (br *Broker[T]) Publish(ctx context.Context, topic string, m *T, opts ...broker.PublishOption) error {
 	if !br.opened {
 		return ErrInvalidConnectionState
 	}
@@ -152,11 +152,11 @@ func (br *Broker[T]) Publish(ctx context.Context, topic string, m *T, opts ...br
 }
 
 // Subscribe implements broker.Broker interface.
-func (br *Broker[T]) Subscribe(ctx context.Context, topic string, h func(broker.Event[T]) error, opts ...broker.SubscribeOption[T]) (broker.Subscriber[T], error) {
+func (br *Broker[T]) Subscribe(ctx context.Context, topic string, h func(broker.Event[T]) error, opts ...broker.SubscribeOption) (broker.Subscriber, error) {
 	if !br.opened {
 		return nil, ErrInvalidConnectionState
 	}
-	subOpts := &broker.SubscribeOptions[T]{}
+	subOpts := &broker.SubscribeOptions{}
 	subOpts.Apply(opts...)
 	newSub := &subscriber[T]{
 		id:   uuid.New().String(),

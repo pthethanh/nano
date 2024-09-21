@@ -2,11 +2,11 @@ package broker
 
 type (
 	// PublishOptions is a configuration holder for publish options.
-	PublishOptions[T any] struct {
+	PublishOptions struct {
 	}
 
 	// SubscribeOptions is a configuration holder for subscriptions.
-	SubscribeOptions[T any] struct {
+	SubscribeOptions struct {
 		// AutoAck defaults to true. When a handler returns
 		// with a nil error the message is acked.
 		AutoAck bool
@@ -17,29 +17,29 @@ type (
 	}
 
 	// PublishOption is a func for config publish options.
-	PublishOption[T any] func(*PublishOptions[T])
+	PublishOption func(*PublishOptions)
 
 	// SubscribeOption is a func for config subscription.
-	SubscribeOption[T any] func(*SubscribeOptions[T])
+	SubscribeOption func(*SubscribeOptions)
 )
 
 // Queue sets the name of the queue to share messages on
-func Queue[T any](name string) SubscribeOption[T] {
-	return func(o *SubscribeOptions[T]) {
+func Queue[T any](name string) SubscribeOption {
+	return func(o *SubscribeOptions) {
 		o.Queue = name
 	}
 }
 
 // DisableAutoAck will disable auto ack of messages
 // after they have been handled.
-func DisableAutoAck[T any]() SubscribeOption[T] {
-	return func(o *SubscribeOptions[T]) {
+func DisableAutoAck() SubscribeOption {
+	return func(o *SubscribeOptions) {
 		o.AutoAck = false
 	}
 }
 
 // Apply apply the options.
-func (op *SubscribeOptions[T]) Apply(opts ...SubscribeOption[T]) {
+func (op *SubscribeOptions) Apply(opts ...SubscribeOption) {
 	for _, f := range opts {
 		f(op)
 	}

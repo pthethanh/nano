@@ -24,7 +24,7 @@ func (w *wrappedServerStream) Context() context.Context {
 }
 
 // newWrapServerStream returns a ServerStream that has the ability to overwrite context.
-func newWrapServerStream(ctx context.Context, stream grpc.ServerStream) grpc.ServerStream {
+func newWrapServerStream(_ context.Context, stream grpc.ServerStream) grpc.ServerStream {
 	if existing, ok := stream.(*wrappedServerStream); ok {
 		return existing
 	}

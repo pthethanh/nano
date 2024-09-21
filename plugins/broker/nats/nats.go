@@ -54,7 +54,7 @@ func (n *Nats[T]) Open(ctx context.Context) error {
 }
 
 // Publish implements broker.Broker interface.
-func (n *Nats[T]) Publish(ctx context.Context, topic string, m *T, opts ...broker.PublishOption[T]) error {
+func (n *Nats[T]) Publish(ctx context.Context, topic string, m *T, opts ...broker.PublishOption) error {
 	b, err := n.codec.Marshal(m)
 	if err != nil {
 		return err
@@ -63,8 +63,8 @@ func (n *Nats[T]) Publish(ctx context.Context, topic string, m *T, opts ...broke
 }
 
 // Subscribe implements broker.Broker interface.
-func (n *Nats[T]) Subscribe(ctx context.Context, topic string, h func(broker.Event[T]) error, opts ...broker.SubscribeOption[T]) (broker.Subscriber[T], error) {
-	op := &broker.SubscribeOptions[T]{
+func (n *Nats[T]) Subscribe(ctx context.Context, topic string, h func(broker.Event[T]) error, opts ...broker.SubscribeOption) (broker.Subscriber, error) {
+	op := &broker.SubscribeOptions{
 		AutoAck: true,
 	}
 	op.Apply(opts...)

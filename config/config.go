@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/fsnotify/fsnotify"
@@ -24,6 +25,26 @@ type (
 		Log(ctx context.Context, level slog.Level, msg string, args ...any)
 	}
 )
+
+func Read[T any](ctx context.Context, opts ...Option) (*T, error) {
+	r, err := NewReader[T](opts...)
+	if err != nil {
+		return nil, err
+	}
+	t, err := r.Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func MustRead[T any](ctx context.Context, opts ...Option) *T {
+	t, err := Read[T](ctx, opts...)
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
 
 func NewReader[T any](opts ...Option) (*Reader[T], error) {
 	r := &Reader[T]{
@@ -53,6 +74,7 @@ func NewReader[T any](opts ...Option) (*Reader[T], error) {
 			r.opts.localPaths = append(r.opts.localPaths, ".")
 		}
 		for _, p := range r.opts.localPaths {
+			r.log.Log(context.Background(), slog.LevelInfo, "reading config", "path", filepath.Join(p, r.opts.localName+"."+r.opts.localType))
 			r.vp.AddConfigPath(p)
 		}
 	}

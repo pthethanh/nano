@@ -1,0 +1,4 @@
+addresses:
+- localhost:9092
+user: test
+password: xxx

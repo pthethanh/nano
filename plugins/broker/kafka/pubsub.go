@@ -9,7 +9,7 @@ type subscriber[T any] struct {
 	broker   *Broker[T]
 	consumer sarama.ConsumerGroup
 	t        string
-	opts     broker.SubscribeOptions[T]
+	opts     broker.SubscribeOptions
 }
 
 type event[T any] struct {
@@ -43,7 +43,7 @@ func (p *event[T]) Reason() broker.Reason {
 	return p.reason
 }
 
-func (s *subscriber[T]) Options() broker.SubscribeOptions[T] {
+func (s *subscriber[T]) Options() broker.SubscribeOptions {
 	return s.opts
 }
 

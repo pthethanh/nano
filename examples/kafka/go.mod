@@ -1,15 +1,16 @@
-module github.com/pthethanh/nano/plugins/broker/kafka
+module github.com/pthethanh/nano/examples/kafka
 
 go 1.23.1
 
 require (
-	github.com/IBM/sarama v1.42.1
-	github.com/bytedance/sonic v1.12.1
 	github.com/google/uuid v1.6.0
 	github.com/pthethanh/nano v0.0.1
+	github.com/pthethanh/nano/plugins/broker/kafka v0.0.1
 )
 
 require (
+	github.com/IBM/sarama v1.42.1 // indirect
+	github.com/bytedance/sonic v1.12.1 // indirect
 	github.com/bytedance/sonic/loader v0.2.0 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect
 	github.com/cloudwego/iasm v0.2.0 // indirect
@@ -31,6 +32,9 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.18 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
+	go.uber.org/zap v1.27.0 // indirect
+	go.uber.org/zap/exp v0.2.0 // indirect
 	golang.org/x/arch v0.9.0 // indirect
 	golang.org/x/crypto v0.26.0 // indirect
 	golang.org/x/net v0.28.0 // indirect
@@ -38,4 +42,5 @@ require (
 	google.golang.org/protobuf v1.34.2 // indirect
 )
 
-// replace github.com/pthethanh/nano v0.0.1 => ../../../
+replace github.com/pthethanh/nano/plugins/broker/kafka v0.0.1 => ../../plugins/broker/kafka
+replace github.com/pthethanh/nano v0.0.1 => ../../
