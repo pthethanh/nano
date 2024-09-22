@@ -9,20 +9,20 @@ import (
 	_ "google.golang.org/grpc/health" // enable health check
 )
 
-// Dial creates a client connection to the given target with health check enabled
+// New creates a client connection to the given target with health check enabled
 // and some others default configurations.
-func Dial(ctx context.Context, address string, options ...grpc.DialOption) (*grpc.ClientConn, error) {
+func New(_ context.Context, address string, options ...grpc.DialOption) (*grpc.ClientConn, error) {
 	opts := append([]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}, options...)
-	conn, err := grpc.DialContext(ctx, address, opts...)
+	conn, err := grpc.NewClient(address, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return conn, nil
 }
 
-// MustDial same as Dial but panic if error.
-func MustDial(ctx context.Context, address string, options ...grpc.DialOption) *grpc.ClientConn {
-	conn, err := Dial(ctx, address, options...)
+// MustNew same as New but panic if error.
+func MustNew(ctx context.Context, address string, options ...grpc.DialOption) *grpc.ClientConn {
+	conn, err := New(ctx, address, options...)
 	if err != nil {
 		panic(err)
 	}

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/pthethanh/nano/examples/helloworld/api"
-	"github.com/pthethanh/nano/grpc/client"
 	"github.com/pthethanh/nano/grpc/server"
 	"github.com/pthethanh/nano/log"
 )
@@ -28,8 +27,7 @@ func (*HelloServer) SayHello(ctx context.Context, req *api.HelloRequest) (*api.H
 func main() {
 	srv := server.New(server.Address(":8081"))
 	go testServer(srv)
-
-	if err := srv.ListenAndServe(context.TODO(), &HelloServer{}); err != nil {
+	if err := srv.ListenAndServe(context.TODO(), new(HelloServer)); err != nil {
 		panic(err)
 	}
 }
@@ -41,7 +39,7 @@ func testServer(srv *server.Server) {
 	for {
 		time.Sleep(time.Second)
 		// call hello server using gRPC
-		client := api.NewHelloClient(client.MustDial(context.TODO(), srv.Address(), srv.DialOpts()...))
+		client := api.MustNewHelloClient(context.TODO(), srv.Address(), srv.DialOpts()...)
 		res, err := client.SayHello(context.TODO(), &api.HelloRequest{
 			Name: "Jack",
 		})

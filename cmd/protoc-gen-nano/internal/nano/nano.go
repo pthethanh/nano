@@ -1,6 +1,8 @@
 package nano
 
 import (
+	"strings"
+
 	"github.com/pthethanh/nano/cmd/protoc-gen-nano/internal/generator"
 	pb "google.golang.org/protobuf/types/descriptorpb"
 )
@@ -45,6 +47,7 @@ func (g *nano) GenerateImports(file *generator.FileDescriptor, imports map[gener
 	}
 	g.P("import (")
 	g.P("grpc ", `"google.golang.org/grpc"`)
+	g.P(`"github.com/pthethanh/nano/grpc/client"`)
 	if g.gen.GenGW {
 		g.P(`"context"`)
 		g.P("grpc ", `"google.golang.org/grpc"`)
@@ -60,6 +63,8 @@ func (g *nano) generateService(file *generator.FileDescriptor, service *pb.Servi
 	origServiceName := service.GetName()
 
 	serviceName := generator.CamelCase(origServiceName)
+	clientName := strings.ToLower(string(serviceName[0])) + string(serviceName[1:])
+
 	serviceAlias := "Unimplemented" + serviceName + "Server"
 
 	g.P("func (", serviceAlias, ") ServiceDesc() *grpc.ServiceDesc{")
@@ -75,5 +80,12 @@ func (g *nano) generateService(file *generator.FileDescriptor, service *pb.Servi
 	g.P()
 	g.P("func (", serviceAlias, ") Name() string {")
 	g.P("return \"", serviceName+"Server\"")
+	g.P("}")
+
+	g.P()
+	g.P("func MustNew" + serviceName + "Client(ctx context.Context, addr string, opts ...grpc.DialOption) " + serviceName + "Client {")
+	g.P("return &" + clientName + "Client{")
+	g.P("cc: client.MustNew(ctx, addr, opts...),")
+	g.P("}")
 	g.P("}")
 }

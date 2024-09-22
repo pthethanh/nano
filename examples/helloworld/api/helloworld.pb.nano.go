@@ -13,6 +13,7 @@ import (
 import (
 	"context"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/pthethanh/nano/grpc/client"
 	grpc "google.golang.org/grpc"
 )
 
@@ -31,4 +32,10 @@ func (UnimplementedHelloServer) RegisterWithEndpoint(ctx context.Context, mux *r
 
 func (UnimplementedHelloServer) Name() string {
 	return "HelloServer"
+}
+
+func MustNewHelloClient(ctx context.Context, addr string, opts ...grpc.DialOption) HelloClient {
+	return &helloClient{
+		cc: client.MustNew(ctx, addr, opts...),
+	}
 }

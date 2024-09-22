@@ -42,6 +42,25 @@ message HelloResponse {
 }
 ```
 
+Install `protoc-gen-nano` plugin:
+```shell
+go install github.com/pthethanh/nano/cmd/protoc-gen-nano
+```
+
+Gen proto:
+```shell
+protoc -I /usr/local/include -I ~/go/src/github.com/googleapis/googleapis -I ./proto \
+ --go_out ~/go/src \
+ --nano_out ~/go/src \
+ --nano_opt generate_gateway=true \
+ --go-grpc_out ~/go/src \
+ --grpc-gateway_out ~/go/src \
+ --grpc-gateway_opt logtostderr=true \
+ --grpc-gateway_opt generate_unbound_methods=true \
+ ./proto/helloworld.proto
+
+```
+
 Implement the service and start the server:
 ```go
 package main
