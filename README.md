@@ -92,9 +92,9 @@ func main() {
 }
 ```
 
-Make a call using `client` package:
+Create client and make a call to the server:
 ```go
-client := api.NewHelloClient(client.MustDial(context.TODO(), ":8081"))
+client := api.MustNewHelloClient(context.TODO(), ":8081")
 res, err := client.SayHello(context.TODO(), &api.HelloRequest{
     Name: "Jack",
 })
