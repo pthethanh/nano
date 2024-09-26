@@ -24,7 +24,7 @@ type (
 )
 
 // Queue sets the name of the queue to share messages on
-func Queue[T any](name string) SubscribeOption {
+func Queue(name string) SubscribeOption {
 	return func(o *SubscribeOptions) {
 		o.Queue = name
 	}

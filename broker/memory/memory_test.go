@@ -45,7 +45,7 @@ func TestBroker(t *testing.T) {
 	subGroup1, err := b.Subscribe(context.Background(), topic, func(msg broker.Event[Person]) error {
 		ch <- msg
 		return nil
-	}, broker.Queue[Person]("q1"))
+	}, broker.Queue("q1"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestBroker(t *testing.T) {
 	subGroup2, err := b.Subscribe(context.Background(), topic, func(msg broker.Event[Person]) error {
 		ch <- msg
 		return nil
-	}, broker.Queue[Person]("q1"))
+	}, broker.Queue("q1"))
 	if err != nil {
 		t.Fatal(err)
 	}
