@@ -48,7 +48,7 @@ func MustRead[T any](ctx context.Context, opts ...Option) *T {
 
 func NewReader[T any](opts ...Option) (*Reader[T], error) {
 	r := &Reader[T]{
-		vp: viper.New(),
+		vp: viper.NewWithOptions(viper.ExperimentalBindStruct()),
 		opts: &options{
 			envReplacers: []*strings.Replacer{
 				strings.NewReplacer(".", "_"),
@@ -93,10 +93,9 @@ func NewReader[T any](opts ...Option) (*Reader[T], error) {
 			return nil, err
 		}
 	}
-	if r.isLocal() {
-		r.vp.AutomaticEnv()
-		r.loadEnv()
-	}
+	// always load env
+	r.vp.AutomaticEnv()
+	r.loadEnv()
 	if r.opts.onChange != nil {
 		r.vp.OnConfigChange(func(in fsnotify.Event) {
 			r.opts.onChange(in)
