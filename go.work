@@ -4,10 +4,10 @@ use .
 
 use ./cmd/protoc-gen-nano
 
-use ./examples/helloworld
-
 use ./examples/kafka
 
 use ./plugins/broker/nats
 
 use ./plugins/broker/kafka
+
+use ./examples/helloworld

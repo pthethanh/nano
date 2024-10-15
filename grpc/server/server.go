@@ -66,9 +66,13 @@ type (
 	}
 )
 
+var (
+	DefaultAddress = ":8000"
+)
+
 func New(opts ...grpc.ServerOption) *Server {
 	srv := &Server{
-		addr:            ":8000",
+		addr:            DefaultAddress,
 		logger:          slog.Default(),
 		router:          mux.NewRouter(),
 		http2Srv:        &http2.Server{},
