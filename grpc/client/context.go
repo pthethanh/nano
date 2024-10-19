@@ -14,9 +14,6 @@ import (
 func NewContext(ctx context.Context) context.Context {
 	md1, _ := metadata.FromOutgoingContext(ctx)
 	md2, _ := metadata.FromIncomingContext(ctx)
-	md := metadata.Join(md1, md2)
-	if len(md["X-Request-Id"]) == 0 {
-		metadata.Pairs("X-Request-Id", uuid.NewString())
-	}
+	md := metadata.Join(md1, md2, metadata.Pairs("X-Request-Id", uuid.NewString()))
 	return metadata.NewOutgoingContext(ctx, md)
 }
