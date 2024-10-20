@@ -40,8 +40,8 @@ func Default() *Logger {
 	return def.Load()
 }
 
-func Named(name string, opts ...Option) *Logger {
-	return Default().apply(opts...).With("logger", name)
+func Named(name string) *Logger {
+	return Default().With("logger", name)
 }
 
 // Debug calls Logger.Debug on the default logger.
