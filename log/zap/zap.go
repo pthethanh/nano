@@ -22,10 +22,8 @@ func NewHandler(conf Config, opts ...zap.Option) *zapslog.Handler {
 	if err != nil {
 		panic(err)
 	}
-	return zapslog.NewHandler(core, &zapslog.HandlerOptions{
-		LoggerName: conf.Name,
-		AddSource:  conf.AddSource,
-	})
+
+	return zapslog.NewHandler(core, zapslog.WithName(conf.Name), zapslog.WithCaller(conf.AddSource))
 }
 
 func newCore(conf Config, opts ...zap.Option) (zapcore.Core, error) {
