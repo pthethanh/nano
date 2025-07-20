@@ -2,7 +2,7 @@ PROJECT_NAME=helloword
 GO_BUILD_ENV=CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on
 GO_FILES=$(shell go list ./... | grep -v /vendor/)
 
-PROTOC_VERSION = 3.10.1
+PROTOC_VERSION = 31.1
 GOPATH ?= $(HOME)/go
 PROTO_OUT = $(GOPATH)/src
 MOD=$(GOPATH)/pkg/mod
@@ -27,14 +27,8 @@ test:
 mod_tidy:
 	$(GO_BUILD_ENV) go mod tidy
 
-install_tools:
-	go install \
-    github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway \
-    github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2 \
-    google.golang.org/protobuf/cmd/protoc-gen-go \
-    google.golang.org/grpc/cmd/protoc-gen-go-grpc \
-	github.com/pthethanh/nano/cmd/protoc-gen-nano
-
+install_tools: install_protobuf
+	go install tool
 	git -C $(GOOGLE_APIS_PROTO) pull || git clone https://github.com/googleapis/googleapis $(GOOGLE_APIS_PROTO)
 
 install_protobuf:
@@ -48,7 +42,7 @@ install_protobuf:
 	sudo chmod -R 755 /usr/local/include/
 	sudo chmod +x /usr/local/bin/protoc
 
-gen_proto: install_tools
+gen_proto:
 	$(PROTOC_ENV) protoc -I $(PROTOC_INCLUDES) -I $(GOOGLE_APIS_PROTO) -I ./proto \
 	 --go_out $(PROTO_OUT) \
 	 --nano_out $(PROTO_OUT) \
