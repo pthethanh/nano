@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/pthethanh/nano/examples/helloworld/api"
 	"github.com/pthethanh/nano/grpc/server"
 	"github.com/pthethanh/nano/log"
+	"google.golang.org/grpc/metadata"
 )
 
 type (
@@ -21,8 +23,19 @@ func (*HelloServer) SayHello(ctx context.Context, req *api.HelloRequest) (*api.H
 	}, nil
 }
 
+func requestIDLogger(ctx context.Context) (context.Context, error) {
+	ids := metadata.ValueFromIncomingContext(ctx, "X-Request-Id")
+	if len(ids) > 0 {
+		return log.AppendToContext(ctx, "X-Request-Id", ids[0]), nil
+	}
+	return log.AppendToContext(ctx, "X-Request-Id", uuid.NewString()), nil
+}
+
 func main() {
-	srv := server.New(server.Address(":8081"))
+	srv := server.New(
+		server.Address(":8081"),
+		server.ChainUnaryInterceptor(server.ContextUnaryInterceptor(requestIDLogger)),
+	)
 	if err := srv.ListenAndServe(context.TODO(), new(HelloServer)); err != nil {
 		panic(err)
 	}

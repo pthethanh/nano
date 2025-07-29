@@ -53,3 +53,17 @@ func ContextStreamInterceptor(f func(context.Context) (context.Context, error)) 
 		return handler(srv, newWrapServerStream(newCtx, ss))
 	}
 }
+
+func DeferContextUnaryInterceptor(f func(context.Context)) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+		defer f(ctx)
+		return handler(ctx, req)
+	}
+}
+
+func DeferContextStreamInterceptor(f func(context.Context)) grpc.StreamServerInterceptor {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		defer f(ss.Context())
+		return handler(srv, newWrapServerStream(ss.Context(), ss))
+	}
+}

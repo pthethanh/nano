@@ -51,4 +51,5 @@ gen_proto:
 	 --grpc-gateway_out $(PROTO_OUT) \
      --grpc-gateway_opt logtostderr=true \
      --grpc-gateway_opt generate_unbound_methods=true \
+	 --openapiv2_out docs \
      ./proto/helloworld.proto

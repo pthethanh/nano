@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/pthethanh/nano/examples/helloworld/api"
 	"github.com/pthethanh/nano/log"
 	"github.com/pthethanh/nano/status"
+	"google.golang.org/grpc/metadata"
 )
 
 func main() {
@@ -25,19 +27,33 @@ func main() {
 }
 
 func sendRPCRequest(srv string) error {
-	client := api.MustNewHelloClient(context.TODO(), srv)
-	res, err := client.SayHello(context.TODO(), &api.HelloRequest{
+	c := api.MustNewHelloClient(context.TODO(), srv)
+	requestID := uuid.NewString()
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("X-Request-Id", requestID))
+	log.InfoContext(ctx, "sending gRPC request", "x-request-id", requestID)
+	res, err := c.SayHello(ctx, &api.HelloRequest{
 		Name: "Jack",
 	})
 	if err != nil {
 		return err
 	}
-	log.Info("gRPC response", "message", res.Message)
+	log.InfoContext(ctx, "gRPC response", "message", res.Message)
 	return nil
 }
 
 func sendHTTPRequest(srv string) error {
-	rs, err := http.Post("http://"+srv+"/api/v1/hello", "application/json", strings.NewReader(`{"name":"Jack"}`))
+	url := "http://" + srv + "/api/v1/hello"
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(`{"name":"Jack"}`))
+	if err != nil {
+		return err
+	}
+	requestID := uuid.NewString()
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("X-Request-Id", requestID)
+	req = req.WithContext(log.AppendToContext(req.Context(), "X-Request-Id", requestID))
+
+	log.InfoContext(req.Context(), "sending HTTP request")
+	rs, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -48,6 +64,6 @@ func sendHTTPRequest(srv string) error {
 	if err := json.NewDecoder(rs.Body).Decode(&hrs); err != nil {
 		return err
 	}
-	log.Info("HTTP response", "message", hrs.Message)
+	log.InfoContext(req.Context(), "HTTP response", "message", hrs.Message)
 	return nil
 }
