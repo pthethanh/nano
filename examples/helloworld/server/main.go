@@ -24,11 +24,10 @@ func (*HelloServer) SayHello(ctx context.Context, req *api.HelloRequest) (*api.H
 }
 
 func requestIDLogger(ctx context.Context) (context.Context, error) {
-	ids := metadata.ValueFromIncomingContext(ctx, "X-Request-Id")
-	if len(ids) > 0 {
-		return log.AppendToContext(ctx, "X-Request-Id", ids[0]), nil
+	if ids := metadata.ValueFromIncomingContext(ctx, "x-request-id"); len(ids) > 0 {
+		return log.AppendToContext(ctx, "x-request-id", ids[0]), nil
 	}
-	return log.AppendToContext(ctx, "X-Request-Id", uuid.NewString()), nil
+	return log.AppendToContext(ctx, "x-request-id", uuid.NewString()), nil
 }
 
 func main() {

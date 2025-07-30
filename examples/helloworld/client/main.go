@@ -30,7 +30,8 @@ func sendRPCRequest(srv string) error {
 	c := api.MustNewHelloClient(context.TODO(), srv)
 	requestID := uuid.NewString()
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("X-Request-Id", requestID))
-	log.InfoContext(ctx, "sending gRPC request", "x-request-id", requestID)
+	ctx = log.AppendToContext(ctx, "X-Request-Id", requestID)
+	log.InfoContext(ctx, "sending gRPC request")
 	res, err := c.SayHello(ctx, &api.HelloRequest{
 		Name: "Jack",
 	})
