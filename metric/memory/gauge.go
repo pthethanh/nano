@@ -30,6 +30,9 @@ func (c *gauge) Set(value float64) {
 }
 
 func (c *gauge) With(labelValues ...string) metric.Gauge {
+	if len(labelValues)%2 != 0 {
+		panic("With required a key/value pair")
+	}
 	cc := &gauge{
 		lbvl: c.lbvl.With(labelValues...),
 		cv:   c.cv,

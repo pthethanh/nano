@@ -26,6 +26,9 @@ func (c *counter) Add(delta float64) {
 }
 
 func (c *counter) With(labelValues ...string) metric.Counter {
+	if len(labelValues)%2 != 0 {
+		panic("With required a key/pair values")
+	}
 	cc := &counter{
 		lbvl: c.lbvl.With(labelValues...),
 		cv:   c.cv,

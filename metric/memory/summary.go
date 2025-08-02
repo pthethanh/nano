@@ -45,6 +45,9 @@ func newSummary(name string, objectives map[float64]float64, maxAge time.Duratio
 }
 
 func (h *summary) With(tags ...string) metric.Summary {
+	if len(tags)%2 != 0 {
+		panic("With required a key/value pair")
+	}
 	return &summary{
 		lbvl: h.lbvl.With(tags...),
 		hv:   h.hv,

@@ -23,6 +23,9 @@ func newHistogram(name string, bucket []float64, labels ...string) *histogram {
 }
 
 func (h *histogram) With(tags ...string) metric.Histogram {
+	if len(tags)%2 != 0 {
+		panic("With required a key/value pair")
+	}
 	return &histogram{
 		lbvl: h.lbvl.With(tags...),
 		hv:   h.hv,

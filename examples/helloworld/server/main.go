@@ -9,6 +9,8 @@ import (
 	"github.com/pthethanh/nano/grpc/health"
 	"github.com/pthethanh/nano/grpc/server"
 	"github.com/pthethanh/nano/log"
+	"github.com/pthethanh/nano/metric/memory"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -33,9 +35,28 @@ func requestIDLogger(ctx context.Context) (context.Context, error) {
 }
 
 func main() {
+	metricSrv := memory.New()
 	srv := server.New(
 		server.Address(":8081"),
-		server.ChainUnaryInterceptor(server.ContextUnaryInterceptor(requestIDLogger)),
+		server.Handler("/api/v1/metrics", metricSrv),
+		server.ChainUnaryInterceptor(
+			server.ContextUnaryInterceptor(requestIDLogger),
+			server.DeferContextUnaryInterceptor(func(ctx context.Context) {
+				defer func() {
+					if err := recover(); err != nil {
+						log.ErrorContext(ctx, "recovered from panic", "error", err)
+					}
+				}()
+			}),
+			grpc.UnaryServerInterceptor(func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+				metricSrv.Counter("grpc_requests_total", "method").With("method", info.FullMethod).Add(1)
+				start := time.Now()
+				defer func() {
+					metricSrv.Histogram("grpc_request_duration_seconds", []float64{0.1, 0.5, 1.0, 2.5, 5.0}, "method").With("method", info.FullMethod).Record(time.Since(start).Seconds())
+				}()
+				return handler(ctx, req)
+			}),
+		),
 	)
 	healthSrv := health.NewServer()
 	healthSrv.AddService("hello", health.NoDelay, 5*time.Second, time.Second, health.CheckFunc(func(ctx context.Context) error {
