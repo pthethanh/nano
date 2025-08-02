@@ -1,13 +1,13 @@
 # nano
 
-A simple Go tool kit for building microservices.
+A clean, simple and easy to use Go tool kit for building microservices.
 
 ## Design Principles
 
-1. Easy to use.
-2. Compatible with Go, gRPC native libraries as much as possible.
-3. Default ready to use but give options for flexibility
-4. No cross dependencies between packages.
+1. Simple and easy to use.
+2. Designed to work seamlessly with Go and native gRPC libraries whenever possible.
+3. Ready to use out of the box, with flexible configuration options.
+4. No cross-package dependencies — each package can be used independently without relying on others in the repository.
 
 ## Getting Started
 
