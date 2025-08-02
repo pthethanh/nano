@@ -11,25 +11,43 @@ import (
 
 type (
 	Reporter struct {
+		apiPrefix string
+
 		prefix     string
 		counters   *cache[*counter]
 		gauges     *cache[*gauge]
 		histograms *cache[*histogram]
 		summaries  *cache[*summary]
 	}
+	ReporterOption func(*Reporter)
 )
 
-func New() *Reporter {
-	return &Reporter{
+func APIPrefix(prefix string) ReporterOption {
+	return func(r *Reporter) {
+		r.apiPrefix = prefix
+	}
+}
+
+func New(opts ...ReporterOption) *Reporter {
+	r := &Reporter{
+		apiPrefix:  "/api/v1/metrics",
 		counters:   newCache[*counter](),
 		summaries:  newCache[*summary](),
 		histograms: newCache[*histogram](),
 		gauges:     newCache[*gauge](),
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 func (r *Reporter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	promhttp.Handler().ServeHTTP(w, req)
+}
+
+func (r *Reporter) HTTPHandler() (string, http.Handler) {
+	return r.apiPrefix, http.HandlerFunc(r.ServeHTTP)
 }
 
 func (r *Reporter) Counter(name string, labels ...string) metric.Counter {

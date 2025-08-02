@@ -7,7 +7,8 @@ import (
 
 type (
 	cache[T any] struct {
-		cache *sync.Map
+		cache map[key]T
+		mux   *sync.Mutex
 	}
 	key struct {
 		k  string
@@ -17,15 +18,19 @@ type (
 
 func newCache[T any]() *cache[T] {
 	return &cache[T]{
-		cache: new(sync.Map),
+		cache: make(map[key]T),
+		mux:   new(sync.Mutex),
 	}
 }
 
 func (c *cache[T]) loadOrCreate(k string, vs []string, create func() T) T {
+	c.mux.Lock()
+	defer c.mux.Unlock()
 	mk := key{k: k, vs: strings.Join(vs, "|")}
-	if v, ok := c.cache.Load(mk); ok {
-		return v.(T)
+	if v, ok := c.cache[mk]; ok {
+		return v
 	}
-	v, _ := c.cache.LoadOrStore(mk, create())
-	return v.(T)
+	nc := create()
+	c.cache[mk] = nc
+	return nc
 }

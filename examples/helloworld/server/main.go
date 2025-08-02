@@ -38,7 +38,6 @@ func main() {
 	metricSrv := memory.New()
 	srv := server.New(
 		server.Address(":8081"),
-		server.Handler("/api/v1/metrics", metricSrv),
 		server.ChainUnaryInterceptor(
 			server.ContextUnaryInterceptor(requestIDLogger),
 			server.DeferContextUnaryInterceptor(func(ctx context.Context) {
@@ -63,7 +62,7 @@ func main() {
 		// ok
 		return nil
 	}))
-	if err := srv.ListenAndServe(context.TODO(), new(HelloServer), healthSrv); err != nil {
+	if err := srv.ListenAndServe(context.TODO(), new(HelloServer), healthSrv, metricSrv); err != nil {
 		panic(err)
 	}
 }
