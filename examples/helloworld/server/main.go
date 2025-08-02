@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/pthethanh/nano/examples/helloworld/api"
+	"github.com/pthethanh/nano/grpc/health"
 	"github.com/pthethanh/nano/grpc/server"
 	"github.com/pthethanh/nano/log"
 	"google.golang.org/grpc/metadata"
@@ -35,7 +37,12 @@ func main() {
 		server.Address(":8081"),
 		server.ChainUnaryInterceptor(server.ContextUnaryInterceptor(requestIDLogger)),
 	)
-	if err := srv.ListenAndServe(context.TODO(), new(HelloServer)); err != nil {
+	healthSrv := health.NewServer()
+	healthSrv.AddService("hello", health.NoDelay, 5*time.Second, time.Second, health.CheckFunc(func(ctx context.Context) error {
+		// ok
+		return nil
+	}))
+	if err := srv.ListenAndServe(context.TODO(), new(HelloServer), healthSrv); err != nil {
 		panic(err)
 	}
 }

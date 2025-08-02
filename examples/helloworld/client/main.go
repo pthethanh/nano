@@ -11,6 +11,7 @@ import (
 	"github.com/pthethanh/nano/examples/helloworld/api"
 	"github.com/pthethanh/nano/log"
 	"github.com/pthethanh/nano/status"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -27,12 +28,19 @@ func main() {
 }
 
 func sendRPCRequest(srv string) error {
-	c := api.MustNewHelloClient(context.TODO(), srv)
+	var serviceConfig = `{
+		"loadBalancingConfig": [{"round_robin":{}}],
+		"healthCheckConfig": {
+			"serviceName": ""
+		}
+	}`
+	hc := api.MustNewHelloClient(context.TODO(), srv, grpc.WithDefaultServiceConfig(serviceConfig))
+
 	requestID := uuid.NewString()
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("X-Request-Id", requestID))
 	ctx = log.AppendToContext(ctx, "X-Request-Id", requestID)
 	log.InfoContext(ctx, "sending gRPC request")
-	res, err := c.SayHello(ctx, &api.HelloRequest{
+	res, err := hc.SayHello(ctx, &api.HelloRequest{
 		Name: "Jack",
 	})
 	if err != nil {

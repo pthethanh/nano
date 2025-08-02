@@ -252,8 +252,7 @@ func (srv *Server) registerServices(ctx context.Context, services ...any) error 
 			prefix, h := h.HTTPHandler()
 			srv.router.PathPrefix(prefix).Handler(h)
 			valid = true
-		}
-		if h, ok := s.(http.Handler); ok {
+		} else if h, ok := s.(http.Handler); ok {
 			srv.router.Handle("/", h)
 			valid = true
 		}
