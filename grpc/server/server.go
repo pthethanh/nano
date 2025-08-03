@@ -90,9 +90,6 @@ func New(opts ...grpc.ServerOption) *Server {
 		ReadTimeout:  srv.readTimeout,
 		WriteTimeout: srv.writeTimeout,
 	}
-	if srv.onShutdown != nil {
-		srv.httpSrv.RegisterOnShutdown(srv.onShutdown)
-	}
 	return srv
 }
 
@@ -179,6 +176,9 @@ func (srv *Server) apply(opts ...grpc.ServerOption) {
 }
 
 func (srv *Server) listenAndServe(ctx context.Context) error {
+	if srv.onShutdown != nil {
+		defer srv.onShutdown()
+	}
 	if srv.lis == nil {
 		lis, err := net.Listen("tcp", srv.addr)
 		if err != nil {
