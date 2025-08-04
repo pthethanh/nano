@@ -9,12 +9,12 @@ type (
 	contextKeyAttrs struct{}
 )
 
-// NewContext return new context with the given logger inside.
+// NewContext returns a new context with the given logger.
 func NewContext(ctx context.Context, logger *Logger) context.Context {
 	return context.WithValue(ctx, contextKey{}, logger)
 }
 
-// FromContext return logger from the given context if exist
+// FromContext retrieves the logger from the context if present.
 func FromContext(ctx context.Context) *Logger {
 	if v := ctx.Value(contextKey{}); v != nil {
 		if l, ok := v.(*Logger); ok {
@@ -24,12 +24,12 @@ func FromContext(ctx context.Context) *Logger {
 	return nil
 }
 
-// NewAttrsContext return new logging attributes context.
+// NewAttrsContext returns a new context with logging attributes.
 func NewAttrsContext(ctx context.Context, attrs ...any) context.Context {
 	return context.WithValue(ctx, contextKeyAttrs{}, attrs)
 }
 
-// AttrsFromContext retrieve log attributes from context if any.
+// AttrsFromContext retrieves logging attributes from the context if present.
 func AttrsFromContext(ctx context.Context) []any {
 	if v := ctx.Value(contextKeyAttrs{}); v != nil {
 		if attrs, ok := v.([]any); ok {
@@ -39,7 +39,7 @@ func AttrsFromContext(ctx context.Context) []any {
 	return nil
 }
 
-// AppendToContext append logging attributes to the given context.
+// AppendToContext appends logging attributes to the context.
 func AppendToContext(ctx context.Context, attrs ...any) context.Context {
 	newAttrs := append([]any{}, attrs...)
 	if v := ctx.Value(contextKeyAttrs{}); v != nil {

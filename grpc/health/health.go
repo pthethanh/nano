@@ -45,13 +45,14 @@ func (c CheckFunc) CheckHealth(ctx context.Context) error {
 	return c(ctx)
 }
 
+// APIPrefix sets the API prefix for HTTP endpoints.
 func APIPrefix(prefix string) ServerOption {
 	return func(s *Server) {
 		s.apiPrefix = prefix
 	}
 }
 
-// NewServer return new gRPC health server.
+// NewServer creates a new health server.
 func NewServer(opts ...ServerOption) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	srv := &Server{
@@ -66,7 +67,7 @@ func NewServer(opts ...ServerOption) *Server {
 	return srv
 }
 
-// AddService add new health check services
+// AddService adds a health check for a service with intervals and checker.
 func (s *Server) AddService(service string, delay, interval, timeout time.Duration, checker Checker) {
 	go func() {
 		t := delay
@@ -82,11 +83,12 @@ func (s *Server) AddService(service string, delay, interval, timeout time.Durati
 	}()
 }
 
-// Register implements health.Server.
+// Register registers the health server with a gRPC server.
 func (s *Server) Register(srv *grpc.Server) {
 	grpc_health_v1.RegisterHealthServer(srv, s)
 }
 
+// HTTPHandler returns HTTP handlers for health check endpoints.
 func (s *Server) HTTPHandler() (pathPrefix string, h http.Handler) {
 	router := http.NewServeMux()
 	router.HandleFunc(path.Join(s.apiPrefix, "/check"), s.checkFunc)
@@ -181,6 +183,7 @@ func (s *Server) checkAndUpdate(name string, timeout time.Duration, check Checke
 	}
 }
 
+// Close close underlying resources
 func (s *Server) Close() error {
 	s.cancel()
 	s.Server.Shutdown()

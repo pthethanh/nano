@@ -86,28 +86,28 @@ type (
 	}
 )
 
-// Logger provide alternate logger for server logging
+// Logger sets a custom logger for server logging.
 func Logger(logger logger) grpc.ServerOption {
 	return loggerOpt{
 		logger: logger,
 	}
 }
 
-// OnShutdown provide custom func to be called before shutting down
+// OnShutdown sets a function to call before server shutdown.
 func OnShutdown(f func()) grpc.ServerOption {
 	return onShutdownOpt{
 		f: f,
 	}
 }
 
-// GateWayOpts provide additional options for api gateway
+// GateWayOpts adds options for the gRPC gateway.
 func GateWayOpts(opts ...runtime.ServeMuxOption) grpc.ServerOption {
 	return gwOpt{
 		opts: opts,
 	}
 }
 
-// Timeout set read, write timeout for internal http server.
+// Timeout sets read and write timeouts for the internal HTTP server.
 func Timeout(read, write time.Duration) grpc.ServerOption {
 	return timeoutOpt{
 		read:  read,
@@ -115,7 +115,7 @@ func Timeout(read, write time.Duration) grpc.ServerOption {
 	}
 }
 
-// TLS enable secure mode using tls key & cert file.
+// TLS enables TLS using the provided cert and key files.
 func TLS(certFile, keyFile string) grpc.ServerOption {
 	creds, err := credentials.NewClientTLSFromFile(certFile, "")
 	if err != nil {
@@ -128,22 +128,21 @@ func TLS(certFile, keyFile string) grpc.ServerOption {
 	}
 }
 
-// Address set server address
+// Address sets the server address.
 func Address(addr string) grpc.ServerOption {
 	return addrOpt{
 		addr: addr,
 	}
 }
 
-// APIPrefix defines grpc gateway api prefix
+// APIPrefix sets the API prefix for the gRPC gateway.
 func APIPrefix(prefix string) grpc.ServerOption {
 	return apiPrefixOpt{
 		prefix: prefix,
 	}
 }
 
-// Handler provide ability to define additional HTTP apis beside GRPC Gateway API.
-// All HTTP API with the given prefix will be forwarded to the given handler.
+// Handler registers an additional HTTP handler with the given prefix.
 func Handler(pathPrefix string, h http.Handler) grpc.ServerOption {
 	return handlerOpt{
 		prefix: pathPrefix,
@@ -151,35 +150,36 @@ func Handler(pathPrefix string, h http.Handler) grpc.ServerOption {
 	}
 }
 
-// NotFoundHandler provide alternative not found HTTP handler.
+// NotFoundHandler sets a custom handler for 404 responses.
 func NotFoundHandler(h http.Handler) grpc.ServerOption {
 	return notFoundHandlerOpt{
 		h: h,
 	}
 }
 
-// Middlewares apply the given middleware on all HTTP requests
+// Middlewares applies middleware to all HTTP requests.
 func Middlewares(mdws ...middleware) grpc.ServerOption {
 	return mdwOpt{
 		mdws: mdws,
 	}
 }
 
-// Listener force server to use the given listener.
+// Listener sets a custom net.Listener for the server.
 func Listener(lis net.Listener) grpc.ServerOption {
 	return lisOpt{
 		lis: lis,
 	}
 }
 
-// ShutdownTimeout define timeout on shutdown.
+// ShutdownTimeout sets the shutdown timeout duration.
 func ShutdownTimeout(d time.Duration) grpc.ServerOption {
 	return shutdownTimeout{
 		timeout: d,
 	}
 }
 
-func headerMatcher(keys []string) runtime.ServeMuxOption {
+// WithIncomingHeaderMatcher customizes which headers are forwarded from HTTP to gRPC.
+func WithIncomingHeaderMatcher(keys []string) runtime.ServeMuxOption {
 	return runtime.WithIncomingHeaderMatcher(func(key string) (string, bool) {
 		canonicalKey := textproto.CanonicalMIMEHeaderKey(key)
 		for _, k := range keys {

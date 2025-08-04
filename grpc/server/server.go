@@ -70,6 +70,7 @@ var (
 	DefaultAddress = ":8000"
 )
 
+// New creates a new gRPC server.
 func New(opts ...grpc.ServerOption) *Server {
 	srv := &Server{
 		addr:            DefaultAddress,
@@ -79,7 +80,7 @@ func New(opts ...grpc.ServerOption) *Server {
 		apiPathPrefix:   "/",
 		shutdownTimeout: -1,
 		dialOpts:        []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())},
-		gwOpts:          []runtime.ServeMuxOption{headerMatcher([]string{"X-Request-Id", "X-Correlation-ID", "Api-Key"})},
+		gwOpts:          []runtime.ServeMuxOption{WithIncomingHeaderMatcher([]string{"X-Request-Id", "X-Correlation-ID", "Api-Key"})},
 	}
 	srv.apply(opts...)
 	srv.grpcSrv = grpc.NewServer(srv.serverOpts...)
@@ -93,8 +94,7 @@ func New(opts ...grpc.ServerOption) *Server {
 	return srv
 }
 
-// ListenAndServe start & serving the given services with gracefully shutdown
-// based on context cancelling or system interrupt signals.
+// ListenAndServe starts the server and serves the provided services with graceful shutdown.
 func (srv *Server) ListenAndServe(ctx context.Context, services ...any) error {
 	if err := srv.registerServices(ctx, services...); err != nil {
 		return err
@@ -105,22 +105,22 @@ func (srv *Server) ListenAndServe(ctx context.Context, services ...any) error {
 	return nil
 }
 
-// RegisterService implements grpc.ServiceRegistrar
+// RegisterService registers a gRPC service.
 func (srv *Server) RegisterService(desc *grpc.ServiceDesc, impl any) {
 	srv.grpcSrv.RegisterService(desc, impl)
 }
 
-// ServeMux return internal server multiplexer.
+// ServeMux returns the internal gRPC-Gateway multiplexer.
 func (srv *Server) ServeMux() *runtime.ServeMux {
 	return srv.gw
 }
 
-// DialOpts return dial options for dialling to the server.
+// DialOpts returns dial options for connecting to the server.
 func (srv *Server) DialOpts() []grpc.DialOption {
 	return srv.dialOpts
 }
 
-// Address return address of the server.
+// Address returns the server address.
 func (srv *Server) Address() string {
 	return srv.addr
 }

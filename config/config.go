@@ -26,6 +26,7 @@ type (
 	}
 )
 
+// Read loads configuration into T using provided options.
 func Read[T any](ctx context.Context, opts ...Option) (*T, error) {
 	r, err := NewReader[T](opts...)
 	if err != nil {
@@ -38,6 +39,7 @@ func Read[T any](ctx context.Context, opts ...Option) (*T, error) {
 	return t, nil
 }
 
+// MustRead loads configuration and panics on error.
 func MustRead[T any](ctx context.Context, opts ...Option) *T {
 	t, err := Read[T](ctx, opts...)
 	if err != nil {
@@ -46,6 +48,7 @@ func MustRead[T any](ctx context.Context, opts ...Option) *T {
 	return t
 }
 
+// NewReader creates a new Reader for configuration loading.
 func NewReader[T any](opts ...Option) (*Reader[T], error) {
 	r := &Reader[T]{
 		vp: viper.NewWithOptions(viper.ExperimentalBindStruct()),
@@ -105,6 +108,7 @@ func NewReader[T any](opts ...Option) (*Reader[T], error) {
 	return r, nil
 }
 
+// MustNewReader creates a new Reader and panics on error.
 func MustNewReader[T any](opts ...Option) *Reader[T] {
 	r, err := NewReader[T](opts...)
 	if err != nil {
@@ -113,6 +117,7 @@ func MustNewReader[T any](opts ...Option) *Reader[T] {
 	return r
 }
 
+// Read loads configuration into T from local or remote sources.
 func (r *Reader[T]) Read(ctx context.Context) (*T, error) {
 	if r.isLocal() {
 		if err := r.vp.ReadInConfig(); err != nil {
@@ -153,6 +158,7 @@ func (r *Reader[T]) loadEnv() {
 	}
 }
 
+// WriteEnv writes all config keys as environment variables to w.
 func (r *Reader[T]) WriteEnv(w io.Writer) {
 	for _, k := range r.vp.AllKeys() {
 		env := k

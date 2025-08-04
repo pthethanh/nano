@@ -45,8 +45,7 @@ type (
 	Option func(*options)
 )
 
-// WithPaths looks for named configs in the given paths
-// Also load environment variables from <name>.env in the given paths
+// WithPaths sets config name, type, and search paths. Also loads env from <name>.env in each path.
 func WithPaths(name string, typ string, paths ...string) Option {
 	return func(opts *options) {
 		opts.local = true
@@ -61,8 +60,7 @@ func WithPaths(name string, typ string, paths ...string) Option {
 	}
 }
 
-// WithFile load config in the given file
-// Also load env config from the same directory <fileName>.env
+// WithFile loads config from the given file and env from <fileName>.env in the same directory.
 func WithFile(file string) Option {
 	return func(opts *options) {
 		opts.localFile = true
@@ -81,6 +79,7 @@ func WithFile(file string) Option {
 	}
 }
 
+// WithEnv enables env loading with the given prefix and key replacers.
 func WithEnv(prefix string, replacerOldNewPairs ...string) Option {
 	if len(replacerOldNewPairs)%2 != 0 {
 		panic("replacer must in old-new pairs")
@@ -94,6 +93,7 @@ func WithEnv(prefix string, replacerOldNewPairs ...string) Option {
 	}
 }
 
+// WithEnvFile loads env from the specified file with prefix and key replacers.
 func WithEnvFile(file string, prefix string, replacerOldNewPairs ...string) Option {
 	return func(opts *options) {
 		WithEnv(prefix, replacerOldNewPairs...)(opts)
@@ -101,6 +101,7 @@ func WithEnvFile(file string, prefix string, replacerOldNewPairs ...string) Opti
 	}
 }
 
+// WithRemote loads config from a remote provider.
 func WithRemote(typ string, provider, endpoint, path string) Option {
 	return func(opts *options) {
 		opts.remoteType = typ
@@ -110,6 +111,7 @@ func WithRemote(typ string, provider, endpoint, path string) Option {
 	}
 }
 
+// WithRemoteSecured loads config from a secured remote provider.
 func WithRemoteSecured(typ string, provider, endpoint, path string, secret string) Option {
 	return func(opts *options) {
 		WithRemote(typ, provider, endpoint, path)(opts)
@@ -118,12 +120,14 @@ func WithRemoteSecured(typ string, provider, endpoint, path string, secret strin
 	}
 }
 
+// WithLogger sets a custom logger for config operations.
 func WithLogger(log Logger) Option {
 	return func(opts *options) {
 		opts.logger = log
 	}
 }
 
+// WithOnChange sets a callback for config change events.
 func WithOnChange(f func(in fsnotify.Event)) Option {
 	return func(opts *options) {
 		opts.onChange = f

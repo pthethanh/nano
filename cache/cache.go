@@ -6,37 +6,37 @@ import (
 )
 
 type (
-	// SetOptions hold options when setting value for a key.
+	// SetOptions configures options for setting a cache value.
 	SetOptions struct {
-		TTL time.Duration
+		TTL time.Duration // Time To Live for the key.
 	}
 
-	// SetOption is option when setting value for a key.
+	// SetOption modifies SetOptions.
 	SetOption func(*SetOptions)
 
-	// Cacher is interface for a cache service.
+	// Cacher defines a generic cache service.
 	Cacher[K comparable, V any] interface {
-		// Open establish connection to the target server.
+		// Open connects to the cache backend.
 		Open(ctx context.Context) error
-		// Get a value, return ErrNotFound if key not found.
+		// Get retrieves a value. Returns ErrNotFound if key is missing.
 		Get(ctx context.Context, k K) (V, error)
-		// Set a value
+		// Set stores a value with optional settings.
 		Set(ctx context.Context, k K, v V, opts ...SetOption) error
-		// Delete a value
+		// Delete removes a value.
 		Delete(ctx context.Context, k K) error
-		// Close close the underlying connection.
+		// Close disconnects from the cache backend.
 		Close(ctx context.Context) error
 	}
 )
 
-// TTL is an option to set Time To Live for a key.
+// TTL sets the time-to-live for a cache key.
 func TTL(ttl time.Duration) SetOption {
 	return func(opts *SetOptions) {
 		opts.TTL = ttl
 	}
 }
 
-// Apply apply the options.
+// Apply applies SetOption functions to SetOptions.
 func (opt *SetOptions) Apply(opts ...SetOption) {
 	for _, op := range opts {
 		op(opt)
