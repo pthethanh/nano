@@ -4,10 +4,10 @@ A clean, simple, and easy-to-use Go toolkit for building microservices.
 
 ## Design Principles
 
-1. Simple and intuitive APIs.
-2. Seamless integration with Go and native gRPC libraries.
-3. Ready to use out of the box, with flexible configuration.
-4. No cross-package dependencies — each package is standalone.
+1. Simple and easy to use.
+2. Designed to work seamlessly with Go and native gRPC libraries whenever possible.
+3. Ready to use out of the box, with flexible configuration options.
+4. No cross-package dependencies — each package can be used independently without relying on others in the repository.
 
 ## Getting Started
 
