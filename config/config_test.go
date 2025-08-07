@@ -1,8 +1,10 @@
 package config_test
 
 import (
+	"bytes"
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,7 +84,7 @@ func TestReadConfigPathWithEnvFile(t *testing.T) {
 	}
 }
 
-func TestReadConfigPathWithFile(t *testing.T) {
+func TestMustNewReaderWithFile(t *testing.T) {
 	os.Clearenv()
 	r := config.MustNewReader[conf](config.WithFile("testdata/local.yaml"))
 	conf, err := r.Read(context.Background())
@@ -97,5 +99,54 @@ func TestReadConfigPathWithFile(t *testing.T) {
 	}
 	if !cmp.Equal(conf.Server, srv) {
 		t.Errorf("got server=%v, want server=%v", conf.Server, srv)
+	}
+}
+
+func TestReadConfig(t *testing.T) {
+	os.Clearenv()
+	conf, err := config.Read[conf](context.Background(), config.WithFile("testdata/local.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := server{
+		Host:         "localhost",
+		Port:         8000,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+	}
+	if !cmp.Equal(conf.Server, srv) {
+		t.Errorf("got server=%v, want server=%v", conf.Server, srv)
+	}
+}
+
+func TestMustReadConfig(t *testing.T) {
+	os.Clearenv()
+	conf := config.MustRead[conf](context.Background(), config.WithFile("testdata/local.yaml"))
+	srv := server{
+		Host:         "localhost",
+		Port:         8000,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+	}
+	if !cmp.Equal(conf.Server, srv) {
+		t.Errorf("got server=%v, want server=%v", conf.Server, srv)
+	}
+}
+
+func TestWriteEnv(t *testing.T) {
+	os.Clearenv()
+	r, err := config.NewReader[conf](
+		config.WithEnv("TEST"),
+		config.WithFile("testdata/local.yaml"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := bytes.NewBuffer(nil)
+	_, _ = r.Read(context.Background())
+	r.WriteEnv(got)
+	want := `TEST_SERVER_PORT=8000`
+	if !strings.Contains(got.String(), want) {
+		t.Errorf("got env=%v, want env=%v", got.String(), want)
 	}
 }
