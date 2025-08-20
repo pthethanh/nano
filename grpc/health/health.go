@@ -33,10 +33,21 @@ type (
 		CheckHealth(ctx context.Context) error
 	}
 
+	// ServerOption is a function that configures the health server.
 	ServerOption func(*Server)
+
+	// Service defines a service to be monitored by the health server.
+	Service struct {
+		Name     string        `json:"name"`
+		Delay    time.Duration `json:"delay"`
+		Interval time.Duration `json:"interval"`
+		Timeout  time.Duration `json:"timeout"`
+		Checker  Checker       `json:"-"`
+	}
 )
 
 var (
+	// NoDelay is a constant for no initial delay.
 	NoDelay time.Duration = 0
 )
 
@@ -67,18 +78,22 @@ func NewServer(opts ...ServerOption) *Server {
 	return srv
 }
 
-// AddService adds a health check for a service with intervals and checker.
-func (s *Server) AddService(service string, delay, interval, timeout time.Duration, checker Checker) {
+// Add adds a health check for a service with intervals and checker.
+// The service name is used to identify the service in health checks.
+// The delay is the initial delay before the first health check.
+// The interval is the time between subsequent health checks.
+// The timeout is the maximum time to wait for a health check to complete.
+func (s *Server) Add(srv Service) {
 	go func() {
-		t := delay
+		t := srv.Delay
 		for {
 			select {
 			case <-time.After(t):
-				s.checkAndUpdate(service, timeout, checker)
+				s.checkAndUpdate(srv.Name, srv.Timeout, srv.Checker)
 			case <-s.cancelCtx.Done():
 				return
 			}
-			t = interval
+			t = srv.Interval
 		}
 	}()
 }

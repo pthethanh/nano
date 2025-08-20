@@ -45,11 +45,13 @@ func recoverInterceptor(ctx context.Context) {
 }
 
 func metricsInterceptor(metricSrv *memory.Reporter) grpc.UnaryServerInterceptor {
+	c := metricSrv.Counter("grpc_requests_total", "method")
+	h := metricSrv.Histogram("grpc_request_duration_seconds", []float64{0.1, 0.5, 1.0, 2.5, 5.0}, "method")
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-		metricSrv.Counter("grpc_requests_total", "method").With("method", info.FullMethod).Add(1)
+		c.With("method", info.FullMethod).Add(1)
 		start := time.Now()
 		defer func() {
-			metricSrv.Histogram("grpc_request_duration_seconds", []float64{0.1, 0.5, 1.0, 2.5, 5.0}, "method").With("method", info.FullMethod).Record(time.Since(start).Seconds())
+			h.With("method", info.FullMethod).Record(time.Since(start).Seconds())
 		}()
 		return handler(ctx, req)
 	}
@@ -57,10 +59,16 @@ func metricsInterceptor(metricSrv *memory.Reporter) grpc.UnaryServerInterceptor 
 
 func newHealthServer() *health.Server {
 	healthSrv := health.NewServer()
-	healthSrv.AddService("hello", health.NoDelay, 5*time.Second, time.Second, health.CheckFunc(func(ctx context.Context) error {
-		// ok
-		return nil
-	}))
+	healthSrv.Add(health.Service{
+		Name:     "hello",
+		Delay:    health.NoDelay,
+		Timeout:  5 * time.Second,
+		Interval: time.Second,
+		Checker: health.CheckFunc(func(ctx context.Context) error {
+			log.InfoContext(ctx, "checking health of service", "name", "hello")
+			// check all dependencies status here
+			return nil
+		})})
 	return healthSrv
 }
 
