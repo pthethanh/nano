@@ -65,7 +65,6 @@ func newHealthServer() *health.Server {
 		Timeout:  5 * time.Second,
 		Interval: time.Second,
 		Checker: health.CheckFunc(func(ctx context.Context) error {
-			log.InfoContext(ctx, "checking health of service", "name", "hello")
 			// check all dependencies status here
 			return nil
 		})})

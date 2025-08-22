@@ -6,7 +6,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-type wrappedServerStream struct {
+type ContextServerStream struct {
 	grpc.ServerStream
 	ctx context.Context
 }
@@ -19,18 +19,20 @@ var (
 )
 
 // Context returns the wrapped context for the server stream.
-func (w *wrappedServerStream) Context() context.Context {
+func (w *ContextServerStream) Context() context.Context {
 	return w.ctx
 }
 
-// newWrapServerStream returns a ServerStream that has the ability to overwrite context.
-func newWrapServerStream(_ context.Context, stream grpc.ServerStream) grpc.ServerStream {
-	if existing, ok := stream.(*wrappedServerStream); ok {
+// NewContextServerStream returns a ServerStream with the new context.
+// If the stream is already a ContextServerStream, it returns the existing one.
+// This is useful for interceptors that need to modify the context.
+func NewContextServerStream(ctx context.Context, stream grpc.ServerStream) grpc.ServerStream {
+	if existing, ok := stream.(*ContextServerStream); ok {
 		return existing
 	}
-	return &wrappedServerStream{
+	return &ContextServerStream{
 		ServerStream: stream,
-		ctx:          stream.Context(),
+		ctx:          ctx,
 	}
 }
 
@@ -52,7 +54,7 @@ func ContextStreamInterceptor(f func(context.Context) (context.Context, error)) 
 		if err != nil {
 			return err
 		}
-		return handler(srv, newWrapServerStream(newCtx, ss))
+		return handler(srv, NewContextServerStream(newCtx, ss))
 	}
 }
 
@@ -68,6 +70,6 @@ func DeferContextUnaryInterceptor(f func(context.Context)) grpc.UnaryServerInter
 func DeferContextStreamInterceptor(f func(context.Context)) grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		defer f(ss.Context())
-		return handler(srv, newWrapServerStream(ss.Context(), ss))
+		return handler(srv, NewContextServerStream(ss.Context(), ss))
 	}
 }
