@@ -37,11 +37,9 @@ func loggerInterceptor(ctx context.Context) (context.Context, error) {
 }
 
 func recoverInterceptor(ctx context.Context) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.ErrorContext(ctx, "recovered from panic", "error", err)
-		}
-	}()
+	if err := recover(); err != nil {
+		log.ErrorContext(ctx, "recovered from panic", "error", err)
+	}
 }
 
 func metricsInterceptor(metricSrv *memory.Reporter) grpc.UnaryServerInterceptor {

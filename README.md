@@ -76,23 +76,11 @@ func (*HelloServer) SayHello(ctx context.Context, req *api.HelloRequest) (*api.H
 }
 
 func main() {
-	metricSrv := memory.New()
-	srv := server.New(
-		server.Address(":8081"),
-		server.Logger(log.Default()),
-		server.ChainUnaryInterceptor(
-			server.ContextUnaryInterceptor(loggerInterceptor),
-			server.DeferContextUnaryInterceptor(recoverInterceptor),
-			grpc.UnaryServerInterceptor(metricsInterceptor(metricSrv)),
-		),
-		server.OnShutdown(func() { log.Info("cleaning up & saying goodbye....") }),
-	)
-	services := []any{new(HelloServer), newHealthServer(), metricSrv}
-	if err := srv.ListenAndServe(context.TODO(), services...); err != nil {
+	srv := server.New(server.Address(":8081"))
+	if err := srv.ListenAndServe(context.TODO(), new(HelloServer)); err != nil {
 		panic(err)
 	}
 }
-
 ```
 
 ### 5. Create a client and call the server
