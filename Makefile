@@ -34,6 +34,7 @@ build_plugins:
 	$(MAKE) -C  cmd/protoc-gen-nano
 	$(MAKE) -C  plugins/broker/nats
 	$(MAKE) -C  examples/helloworld
+	$(MAKE) -C  examples/kafka
 
 install_tools: install_protobuf
 	$(GO_BUILD_ENV) install tool
