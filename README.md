@@ -113,5 +113,6 @@ See full code at [examples/helloworld](https://github.com/pthethanh/nano/tree/ma
 - **Status**: Comprehensive error and status handling aligned with gRPC codes and HTTP status mappings.
 - **Plugins**: Extend broker and cache functionality effortlessly using custom plugins.
 - **protoc-gen-nano**: Built-in code generator for scaffolding gRPC services, HTTP gateways, and nano service templates.
+- **Interceptors**: I suggest using the interceptors provided by [go-grpc-middleware](https://github.com/grpc-ecosystem/go-grpc-middleware)
 
 All components are modular and can be used independently or together—making **nano** ideal for building scalable, maintainable microservices.
