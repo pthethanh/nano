@@ -13,9 +13,12 @@ import (
 )
 
 type (
+	topic = string
+	queue = string
+	id    = string
 	// Broker is a memory message broker.
 	Broker[T any] struct {
-		subs   map[string][]*subscriber[T]
+		subs   map[topic]map[queue]map[id]*subscriber[T]
 		mu     *sync.RWMutex
 		ch     chan func() error
 		worker int
@@ -29,8 +32,8 @@ type (
 		t      string
 		h      func(broker.Event[T]) error
 		opts   *broker.SubscribeOptions
-		close  func()
 		closed int32
+		close  func()
 	}
 
 	event[T any] struct {
@@ -53,7 +56,7 @@ var (
 // New return new memory broker.
 func New[T any](opts ...Option[T]) *Broker[T] {
 	br := &Broker[T]{
-		subs:   make(map[string][]*subscriber[T]),
+		subs:   make(map[topic]map[queue]map[id]*subscriber[T]),
 		mu:     &sync.RWMutex{},
 		worker: 100,
 		buf:    10_000,
@@ -96,8 +99,11 @@ func (sub *subscriber[T]) Unsubscribe() error {
 	if atomic.AddInt32(&sub.closed, 1) > 1 {
 		return nil
 	}
-	sub.close()
 	return nil
+}
+
+func (sub *subscriber[T]) isClosed() bool {
+	return atomic.LoadInt32(&sub.closed) > 0
 }
 
 // Open implements broker.Broker interface.
@@ -125,26 +131,37 @@ func (br *Broker[T]) Publish(ctx context.Context, topic string, m *T, opts ...br
 		return ErrInvalidConnectionState
 	}
 	br.mu.RLock()
-	subs := br.subs[topic]
+	queueSubs := br.subs[topic]
 	br.mu.RUnlock()
-	// queue, list of sub
-	queueSubs := make(map[string][]*subscriber[T])
 	env := &event[T]{
 		t:   topic,
 		msg: m,
 	}
-	for _, sub := range subs {
-		if sub.opts.Queue != "" {
-			queueSubs[sub.opts.Queue] = append(queueSubs[sub.opts.Queue], sub)
-			continue
+	for queue, queueSub := range queueSubs {
+		switch queue {
+		case "":
+			// no queue, send to all subscribers in the list.
+			for _, sub := range queueSub {
+				if sub.isClosed() {
+					continue
+				}
+				br.ch <- func() error { return sub.h(env) }
+			}
+		default:
+			// queue, send to only 1 single random subscriber in the list.
+			idx := rand.Intn(len(queueSub))
+			i := 0
+			for _, sub := range queueSub {
+				if sub.isClosed() {
+					continue
+				}
+				if i == idx {
+					br.ch <- func() error { return sub.h(env) }
+					break
+				}
+				i++
+			}
 		}
-		// broad cast
-		br.ch <- func() error { return sub.h(env) }
-	}
-	// queue subscribers, send to only 1 single random subscriber in the list.
-	for _, queueSub := range queueSubs {
-		idx := rand.Intn(len(queueSub))
-		br.ch <- func() error { return queueSub[idx].h(env) }
 	}
 	return nil
 }
@@ -165,20 +182,17 @@ func (br *Broker[T]) Subscribe(ctx context.Context, topic string, h func(broker.
 	newSub.close = func() {
 		br.mu.Lock()
 		defer br.mu.Unlock()
-		subs := br.subs[topic]
-		// remove the sub
-		newSubs := make([]*subscriber[T], 0)
-		for _, sub := range subs {
-			if newSub.id == sub.id {
-				continue
-			}
-			newSubs = append(newSubs, sub)
-		}
-		br.subs[topic] = newSubs
+		delete(br.subs[topic][newSub.opts.Queue], newSub.id)
 	}
 	br.mu.Lock()
 	defer br.mu.Unlock()
-	br.subs[topic] = append(br.subs[topic], newSub)
+	if br.subs[topic] == nil {
+		br.subs[topic] = make(map[queue]map[id]*subscriber[T])
+	}
+	if br.subs[topic][newSub.opts.Queue] == nil {
+		br.subs[topic][newSub.opts.Queue] = make(map[id]*subscriber[T])
+	}
+	br.subs[topic][newSub.opts.Queue][newSub.id] = newSub
 	return newSub, nil
 }
 
@@ -196,9 +210,11 @@ func (br *Broker[T]) Close(ctx context.Context) error {
 	close(br.ch)
 	br.wg.Wait()
 	// unsubscribe all subscribers.
-	for _, subs := range br.subs {
-		for _, sub := range subs {
-			sub.Unsubscribe()
+	for _, queue := range br.subs {
+		for _, queue := range queue {
+			for _, sub := range queue {
+				sub.Unsubscribe()
+			}
 		}
 	}
 	return nil

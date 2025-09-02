@@ -2,6 +2,7 @@ package memory_test
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -95,4 +96,45 @@ func TestBroker(t *testing.T) {
 			return
 		}
 	}
+}
+
+func BenchmarkBroker(b *testing.B) {
+	br := memory.New[string]()
+	if err := br.Open(context.TODO()); err != nil {
+		b.Fatal(err)
+	}
+	for j := range 3 {
+		for i := 0; i < 3; i++ {
+			sub, err := br.Subscribe(context.Background(), fmt.Sprintf("topic%d", j), func(e broker.Event[string]) error {
+				return nil
+			}, broker.Queue(fmt.Sprintf("queue%d", j)))
+			if err != nil {
+				b.Fatal(err)
+			}
+			defer sub.Unsubscribe()
+		}
+		for i := 0; i < 3; i++ {
+			sub, err := br.Subscribe(context.Background(), fmt.Sprintf("topic%d", j), func(e broker.Event[string]) error {
+				return nil
+			})
+			if err != nil {
+				b.Fatal(err)
+			}
+			defer sub.Unsubscribe()
+		}
+	}
+	m := "ha ha"
+	b.Run("publish", func(b *testing.B) {
+		for i := 0; b.Loop(); i++ {
+			if err := br.Publish(context.Background(), "topic1", &m); err != nil {
+				b.Fatal(err)
+			}
+			if err := br.Publish(context.Background(), "topic2", &m); err != nil {
+				b.Fatal(err)
+			}
+			if err := br.Publish(context.Background(), "topic3", &m); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
 }
