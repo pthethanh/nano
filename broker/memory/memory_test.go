@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -98,43 +99,85 @@ func TestBroker(t *testing.T) {
 	}
 }
 
-func BenchmarkBroker(b *testing.B) {
-	br := memory.New[string]()
-	if err := br.Open(context.TODO()); err != nil {
-		b.Fatal(err)
+func runBenchmark(b *testing.B, br broker.Broker[string], topic string, queue string, numBroadcastSubs, numQueueSubs int) {
+	ctx := context.Background()
+	if err := br.Open(ctx); err != nil {
+		b.Fatalf("failed to open broker: %v", err)
 	}
-	for j := range 3 {
-		for i := 0; i < 3; i++ {
-			sub, err := br.Subscribe(context.Background(), fmt.Sprintf("topic%d", j), func(e broker.Event[string]) error {
-				return nil
-			}, broker.Queue(fmt.Sprintf("queue%d", j)))
-			if err != nil {
-				b.Fatal(err)
-			}
-			defer sub.Unsubscribe()
-		}
-		for i := 0; i < 3; i++ {
-			sub, err := br.Subscribe(context.Background(), fmt.Sprintf("topic%d", j), func(e broker.Event[string]) error {
-				return nil
-			})
-			if err != nil {
-				b.Fatal(err)
-			}
-			defer sub.Unsubscribe()
+	defer br.Close(ctx)
+
+	var wg sync.WaitGroup
+	wg.Add(b.N * numBroadcastSubs)
+	if numQueueSubs > 0 {
+		wg.Add(b.N)
+	}
+	// Subscribers
+	for range numBroadcastSubs {
+		_, err := br.Subscribe(ctx, topic, func(evt broker.Event[string]) error {
+			wg.Done()
+			return nil
+		})
+		if err != nil {
+			b.Fatalf("failed to subscribe: %v", err)
 		}
 	}
-	m := "ha ha"
-	b.Run("publish", func(b *testing.B) {
-		for i := 0; b.Loop(); i++ {
-			if err := br.Publish(context.Background(), "topic1", &m); err != nil {
-				b.Fatal(err)
-			}
-			if err := br.Publish(context.Background(), "topic2", &m); err != nil {
-				b.Fatal(err)
-			}
-			if err := br.Publish(context.Background(), "topic3", &m); err != nil {
-				b.Fatal(err)
-			}
+	for range numQueueSubs {
+		_, err := br.Subscribe(ctx, topic, func(evt broker.Event[string]) error {
+			wg.Done()
+			return nil
+		}, broker.Queue(queue))
+		if err != nil {
+			b.Fatalf("failed to subscribe: %v", err)
 		}
-	})
+	}
+	// Start benchmark
+	b.ResetTimer()
+	start := time.Now()
+
+	for i := 0; i < b.N; i++ {
+		msg := fmt.Sprintf("msg-%d", i)
+		if err := br.Publish(ctx, topic, &msg); err != nil {
+			b.Fatalf("publish failed: %v", err)
+		}
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		b.Fatalf("timeout waiting for messages")
+	}
+
+	elapsed := time.Since(start)
+	b.ReportMetric(float64(b.N)/elapsed.Seconds(), "msg/sec")
+	b.ReportMetric(float64(elapsed.Microseconds())/float64(b.N), "µs/msg")
+}
+
+func BenchmarkBroker_Queue_Mixed_100(b *testing.B) {
+	// Queue semantics: 1 subscriber → each message consumed once
+	broker := memory.New[string]()
+	runBenchmark(b, broker, "queue_topic", "q1", 50, 50)
+}
+
+func BenchmarkBroker_FanOut_10(b *testing.B) {
+	// Fan-out semantics: 10 subscribers → each message delivered to all subscribers
+	broker := memory.New[string]()
+	runBenchmark(b, broker, "fan_out_topic", "", 10, 0)
+}
+
+func BenchmarkBroker_FanOut_50(b *testing.B) {
+	// Stress test with 50 subscribers
+	broker := memory.New[string]()
+	runBenchmark(b, broker, "fan_out_topic_50", "", 50, 0)
+}
+
+func BenchmarkBroker_FanOut_100(b *testing.B) {
+	// Stress test with 50 subscribers
+	broker := memory.New[string]()
+	runBenchmark(b, broker, "fan_out_topic_100", "", 100, 0)
 }
