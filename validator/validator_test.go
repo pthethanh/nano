@@ -2,8 +2,11 @@ package validator_test
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
+	validate "github.com/go-playground/validator/v10"
 	"github.com/pthethanh/nano/validator"
 )
 
@@ -89,20 +92,28 @@ func TestValidatePartial(t *testing.T) {
 			err: false,
 		},
 	}
-	if root := validator.Root(); root == nil {
+	if root := validator.Default(); root == nil {
 		t.Error("root should not return nil")
 	}
+	tr := validator.ErrorTranslator(func(ctx context.Context, errs validate.ValidationErrors) error {
+		return fmt.Errorf("nano_validation_error: %w", errs)
+	})
+	validator.SetDefault(validator.New("", tr))
+	validator.SetDefault(validator.New("validate_me", tr))
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			var err error
 			if c.fields != nil {
-				err = validator.Get(c.tag).ValidatePartial(context.Background(), c.value, c.fields...)
+				err = validator.Default(c.tag).ValidatePartial(context.Background(), c.value, c.fields...)
 			} else if c.excepts != nil {
-				err = validator.Get(c.tag).ValidateExcept(context.Background(), c.value, c.excepts...)
+				err = validator.Default(c.tag).ValidateExcept(context.Background(), c.value, c.excepts...)
 			} else if c.field {
-				err = validator.Get("").Var(context.Background(), c.value, c.fieldTag)
+				err = validator.Default("").Var(context.Background(), c.value, c.fieldTag)
 			} else {
-				err = validator.Get(c.tag).Validate(context.Background(), c.value)
+				err = validator.Default(c.tag).Validate(context.Background(), c.value)
+			}
+			if c.err && err != nil && !strings.Contains(err.Error(), "nano_validation_error") {
+				t.Errorf("got err=%v, want nano_validation_error", err)
 			}
 			if c.err && err == nil {
 				t.Errorf("got validation success, want validation fail.")
