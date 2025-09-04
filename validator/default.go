@@ -8,8 +8,7 @@ import (
 )
 
 var (
-	def  = new(sync.Map)
-	once sync.Once
+	def = new(sync.Map)
 )
 
 // SetDefault registers a default validator for the specified tag.
@@ -30,13 +29,12 @@ func Default(tags ...string) *Validator {
 	if len(tags) > 0 {
 		tag = tags[0]
 	}
-	once.Do(func() {
-		if _, ok := def.Load(tag); !ok {
-			def.Store(tag, New(tag))
-		}
-	})
-	v, _ := def.Load(tag)
-	return v.(*Validator)
+	if v, ok := def.Load(tag); ok {
+		return v.(*Validator)
+	}
+	v := New(tag)
+	def.Store(tag, v)
+	return v
 }
 
 // Validate a struct exposed fields base on the definition of validate tag.
