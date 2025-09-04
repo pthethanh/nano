@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"context"
 	"sync"
 
 	validate "github.com/go-playground/validator/v10"
@@ -25,26 +26,26 @@ func Get(tag string) *Validator {
 }
 
 // Validate a struct exposed fields base on the definition of validate tag.
-func Validate(v any) error {
-	return Root().Validate(v)
+func Validate(ctx context.Context, v any) error {
+	return Root().Validate(ctx, v)
 }
 
 // ValidatePartial validates the fields passed in only, ignoring all others.
-func ValidatePartial(v any, fields ...string) error {
-	return Root().ValidatePartial(v, fields...)
+func ValidatePartial(ctx context.Context, v any, fields ...string) error {
+	return Root().ValidatePartial(ctx, v, fields...)
 }
 
 // ValidateExcept validates all the fields except the given fields.
-func ValidateExcept(v any, fields ...string) error {
-	return Root().ValidateExcept(v, fields...)
+func ValidateExcept(ctx context.Context, v any, fields ...string) error {
+	return Root().ValidateExcept(ctx, v, fields...)
 }
 
 // Var validates a single variable using tag style validation.
-func Var(field any, tag string) error {
-	return Root().Var(field, tag)
+func Var(ctx context.Context, field any, tag string) error {
+	return Root().Var(ctx, field, tag)
 }
 
 // Register adds a validation with the given tag
-func Register(tag string, fn validate.Func, callValidationEvenIfNull bool) error {
+func Register(tag string, fn validate.FuncCtx, callValidationEvenIfNull bool) error {
 	return Root().Register(tag, fn, callValidationEvenIfNull)
 }

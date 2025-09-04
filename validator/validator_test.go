@@ -1,6 +1,7 @@
 package validator_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/pthethanh/nano/validator"
@@ -24,7 +25,7 @@ func TestValidatePartial(t *testing.T) {
 	cases := []struct {
 		name     string
 		tag      string
-		value    interface{}
+		value    any
 		fields   []string
 		excepts  []string
 		field    bool
@@ -95,13 +96,13 @@ func TestValidatePartial(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			var err error
 			if c.fields != nil {
-				err = validator.Get(c.tag).ValidatePartial(c.value, c.fields...)
+				err = validator.Get(c.tag).ValidatePartial(context.Background(), c.value, c.fields...)
 			} else if c.excepts != nil {
-				err = validator.Get(c.tag).ValidateExcept(c.value, c.excepts...)
+				err = validator.Get(c.tag).ValidateExcept(context.Background(), c.value, c.excepts...)
 			} else if c.field {
-				err = validator.Get("").Var(c.value, c.fieldTag)
+				err = validator.Get("").Var(context.Background(), c.value, c.fieldTag)
 			} else {
-				err = validator.Get(c.tag).Validate(c.value)
+				err = validator.Get(c.tag).Validate(context.Background(), c.value)
 			}
 			if c.err && err == nil {
 				t.Errorf("got validation success, want validation fail.")
