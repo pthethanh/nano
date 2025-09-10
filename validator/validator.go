@@ -67,6 +67,10 @@ func (validator *Validator) Register(tag string, fn validate.FuncCtx, callValida
 	return validator.v.RegisterValidationCtx(tag, fn, callValidationEvenIfNull)
 }
 
+func (validator *Validator) Tag() string {
+	return validator.tag
+}
+
 // translateErr translates the validation errors using the translator function if set.
 func (validator *Validator) translateErr(ctx context.Context, err error) error {
 	if err == nil || validator.tr == nil {

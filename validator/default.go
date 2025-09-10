@@ -19,7 +19,7 @@ var (
 //	SetDefault(New("validate"))
 //	SetDefault(New("custom_tag"))
 func SetDefault(v *Validator) {
-	def.Store(v.tag, v)
+	def.Store(v.Tag(), v)
 }
 
 // Default returns the default validator instance of the given tag, creating one if needed.
