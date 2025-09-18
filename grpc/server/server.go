@@ -273,7 +273,7 @@ func (srv *Server) registerServices(ctx context.Context, services ...any) error 
 // connections or otherHandler otherwise.
 func (srv *Server) handler() http.Handler {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.ProtoMajor == 2 && strings.Contains(r.Header.Get("Content-Type"), "application/grpc") {
+		if r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
 			srv.grpcSrv.ServeHTTP(w, r)
 			return
 		}

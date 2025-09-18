@@ -79,7 +79,7 @@ func main() {
 	srv := server.New(
 		server.Address(":8081"),
 		server.Logger(log.Default()),
-		server.ChainUnaryInterceptor(
+		grpc.ChainUnaryInterceptor(
 			server.ContextUnaryInterceptor(loggerInterceptor),
 			server.DeferContextUnaryInterceptor(recoverInterceptor),
 			grpc.UnaryServerInterceptor(metricsInterceptor(metricSrv)),

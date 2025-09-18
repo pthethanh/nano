@@ -11,13 +11,6 @@ type ContextServerStream struct {
 	ctx context.Context
 }
 
-var (
-	ChainUnaryInterceptor  = grpc.ChainUnaryInterceptor
-	ChainStreamInterceptor = grpc.ChainStreamInterceptor
-	UnaryInterceptor       = grpc.UnaryInterceptor
-	StreamInterceptor      = grpc.StreamInterceptor
-)
-
 // Context returns the wrapped context for the server stream.
 func (w *ContextServerStream) Context() context.Context {
 	return w.ctx
