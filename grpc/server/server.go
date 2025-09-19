@@ -124,12 +124,13 @@ func (srv *Server) ListenAndServe(ctx context.Context, services ...any) error {
 
 // RegisterService registers a gRPC service.
 func (srv *Server) RegisterService(desc *grpc.ServiceDesc, impl any) {
-	srv.grpcSrv.RegisterService(desc, impl)
+	srv.grpcServer().RegisterService(desc, impl)
+	srv.logger.Log(context.TODO(), slog.LevelInfo, "registered service successfully", "name", getTypeName(impl))
 }
 
 // ServeMux returns the internal gRPC-Gateway multiplexer.
 func (srv *Server) ServeMux() *runtime.ServeMux {
-	return srv.grpcGw
+	return srv.grpcGWServer()
 }
 
 // DialOpts returns dial options for connecting to the server.
@@ -218,7 +219,7 @@ func (srv *Server) listenAndServe(ctx context.Context) error {
 		}
 		srv.lis = lis
 	}
-	separatePorts := !srv.useOnePort()
+	separatePorts := !srv.useSinglePort()
 	if separatePorts && srv.httpLis == nil {
 		lis, err := net.Listen("tcp", srv.httpAddr)
 		if err != nil {
@@ -235,7 +236,7 @@ func (srv *Server) listenAndServe(ctx context.Context) error {
 	case separatePorts:
 		// start grpc server
 		go func() {
-			errs <- srv.grpcSrv.Serve(srv.lis)
+			errs <- srv.grpcServer().Serve(srv.lis)
 		}()
 		srv.logger.Log(ctx, slog.LevelInfo, "gRPC server started", "grpc_address", srv.addr)
 		// start http server
@@ -288,7 +289,7 @@ func (srv *Server) shutdown(ctx context.Context) error {
 		defer cancel()
 	}
 	if srv.grpcSrv != nil {
-		srv.grpcSrv.GracefulStop()
+		srv.grpcServer().GracefulStop()
 	}
 	return srv.httpSrv.Shutdown(newCtx)
 }
@@ -320,29 +321,25 @@ func (srv *Server) registerServices(ctx context.Context, services ...any) error 
 		if !valid {
 			return ErrUnknownServiceType
 		}
-		name := fmt.Sprintf("%T", s)
-		if nameSrv, ok := s.(interface{ Name() string }); ok {
-			name = nameSrv.Name()
-		}
-		srv.logger.Log(ctx, slog.LevelInfo, "registered service successfully", "name", name)
+		srv.logger.Log(ctx, slog.LevelInfo, "registered service successfully", "name", getTypeName(s))
 	}
 	srv.router.PathPrefix(srv.apiPathPrefix).Handler(srv.grpcGWServer())
 	return nil
 }
 
 func (srv *Server) handler() http.Handler {
-	if srv.useOnePort() {
-		return srv.onePortHandler()
+	if srv.useSinglePort() {
+		return srv.singlePortHandler()
 	}
 	return srv.router
 }
 
-// onePortHandler returns an http.Handler that delegates to grpcServer on incoming gRPC
+// singlePortHandler returns an http.Handler that delegates to grpcServer on incoming gRPC
 // connections or otherHandler otherwise.
-func (srv *Server) onePortHandler() http.Handler {
+func (srv *Server) singlePortHandler() http.Handler {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
-			srv.grpcSrv.ServeHTTP(w, r)
+			srv.grpcServer().ServeHTTP(w, r)
 			return
 		}
 		srv.router.ServeHTTP(w, r)
@@ -356,7 +353,7 @@ func (srv *Server) onePortHandler() http.Handler {
 	return h2c.NewHandler(h, srv.http2Srv)
 }
 
-func (srv *Server) useOnePort() bool {
+func (srv *Server) useSinglePort() bool {
 	_, port1, err1 := net.SplitHostPort(srv.addr)
 	_, port2, err2 := net.SplitHostPort(srv.httpAddr)
 	return err1 == nil && err2 == nil && port1 == port2
