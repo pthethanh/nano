@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"net/textproto"
+	"slices"
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -52,7 +53,8 @@ type (
 
 	addrOpt struct {
 		emptyOpt
-		addr string
+		grpcAddr string
+		httpAddr string
 	}
 
 	apiPrefixOpt struct {
@@ -77,13 +79,18 @@ type (
 
 	lisOpt struct {
 		emptyOpt
-		lis net.Listener
+		lis     net.Listener
+		httpLis net.Listener
 	}
 
 	shutdownTimeout struct {
 		emptyOpt
 		timeout time.Duration
 	}
+)
+
+var (
+	defaultGWPassthroughHeaders = []string{"X-Request-Id", "X-Correlation-ID", "Api-Key"}
 )
 
 // Logger sets a custom logger for server logging.
@@ -128,10 +135,24 @@ func TLS(certFile, keyFile string) grpc.ServerOption {
 	}
 }
 
-// Address sets the server address.
+// Address sets the server address for both gRPC and HTTP on the same port.
+// Note: Serving both gRPC and HTTP on a single port has limitations—features like
+// service config, retry, and advanced gRPC connection handling may not be fully supported.
+// To avoid these limitations, use SeparateAddresses to expose gRPC and HTTP on
+// different ports.
 func Address(addr string) grpc.ServerOption {
 	return addrOpt{
-		addr: addr,
+		httpAddr: addr,
+		grpcAddr: addr,
+	}
+}
+
+// SeparateAddresses sets separate addresses for gRPC and HTTP servers
+// in case you want to expose them on different ports.
+func SeparateAddresses(grpcAddr, httpAddr string) grpc.ServerOption {
+	return addrOpt{
+		httpAddr: httpAddr,
+		grpcAddr: grpcAddr,
 	}
 }
 
@@ -167,7 +188,16 @@ func Middlewares(mdws ...middleware) grpc.ServerOption {
 // Listener sets a custom net.Listener for the server.
 func Listener(lis net.Listener) grpc.ServerOption {
 	return lisOpt{
-		lis: lis,
+		lis:     lis,
+		httpLis: lis,
+	}
+}
+
+// SeparateListeners sets separate listeners for gRPC and HTTP servers.
+func SeparateListeners(grpcLis, httpLis net.Listener) grpc.ServerOption {
+	return lisOpt{
+		lis:     grpcLis,
+		httpLis: httpLis,
 	}
 }
 
@@ -180,9 +210,12 @@ func ShutdownTimeout(d time.Duration) grpc.ServerOption {
 
 // WithIncomingHeaderMatcher customizes which headers are forwarded from HTTP to gRPC.
 func WithIncomingHeaderMatcher(keys []string) runtime.ServeMuxOption {
+	merged := append(keys, defaultGWPassthroughHeaders...)
+	slices.Sort(merged)
+	merged = slices.Compact(merged)
 	return runtime.WithIncomingHeaderMatcher(func(key string) (string, bool) {
 		canonicalKey := textproto.CanonicalMIMEHeaderKey(key)
-		for _, k := range keys {
+		for _, k := range merged {
 			if k == canonicalKey || textproto.CanonicalMIMEHeaderKey(k) == canonicalKey {
 				return k, true
 			}

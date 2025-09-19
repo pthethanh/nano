@@ -17,12 +17,16 @@ import (
 
 func main() {
 	var addr = flag.String("addr", ":8081", "server address")
+	var httpAddr = flag.String("http-addr", ":8081", "server address")
 	flag.Parse()
 
 	if err := sendRPCRequest(*addr); err != nil {
 		log.Error("failed to send gRPC request", "error", err)
 	}
-	if err := sendHTTPRequest(*addr); err != nil {
+	if httpAddr == nil {
+		httpAddr = addr
+	}
+	if err := sendHTTPRequest(*httpAddr); err != nil {
 		log.Error("failed to send HTTP request", "error", err)
 	}
 }

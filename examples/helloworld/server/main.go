@@ -78,6 +78,7 @@ func main() {
 	metricSrv := memory.New()
 	srv := server.New(
 		server.Address(":8081"),
+		//server.SeparateAddresses(":8081", ":8082"),
 		server.Logger(log.Default()),
 		grpc.ChainUnaryInterceptor(
 			server.ContextUnaryInterceptor(loggerInterceptor),
