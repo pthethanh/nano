@@ -84,30 +84,34 @@ func New(opts ...grpc.ServerOption) *Server {
 		shutdownTimeout: -1,
 	}
 	srv.apply(opts...)
-	srv.httpSrv = &http.Server{
-		Addr:         srv.addr,
-		Handler:      srv.handler(),
-		ReadTimeout:  srv.readTimeout,
-		WriteTimeout: srv.writeTimeout,
-	}
 	return srv
 }
 
-func (srv *Server) grpcGWServer() *runtime.ServeMux {
-	if srv.grpcGw != nil {
-		return srv.grpcGw
+func (srv *Server) httpServer() *http.Server {
+	if srv.httpSrv == nil {
+		srv.httpSrv = &http.Server{
+			Addr:         srv.addr,
+			Handler:      srv.handler(),
+			ReadTimeout:  srv.readTimeout,
+			WriteTimeout: srv.writeTimeout,
+		}
 	}
-	srv.dialOpts = append(srv.dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	srv.gwOpts = append(srv.gwOpts, WithIncomingHeaderMatcher(defaultGWPassthroughHeaders))
-	srv.grpcGw = runtime.NewServeMux(srv.gwOpts...)
+	return srv.httpSrv
+}
+
+func (srv *Server) grpcGWServer() *runtime.ServeMux {
+	if srv.grpcGw == nil {
+		srv.dialOpts = append(srv.dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		srv.gwOpts = append(srv.gwOpts, WithIncomingHeaderMatcher(defaultGWPassthroughHeaders))
+		srv.grpcGw = runtime.NewServeMux(srv.gwOpts...)
+	}
 	return srv.grpcGw
 }
 
 func (srv *Server) grpcServer() *grpc.Server {
-	if srv.grpcSrv != nil {
-		return srv.grpcSrv
+	if srv.grpcSrv == nil {
+		srv.grpcSrv = grpc.NewServer(srv.serverOpts...)
 	}
-	srv.grpcSrv = grpc.NewServer(srv.serverOpts...)
 	return srv.grpcSrv
 }
 
@@ -153,58 +157,62 @@ func (srv *Server) HTTPAddress() string {
 
 func (srv *Server) apply(opts ...grpc.ServerOption) {
 	for _, opt := range opts {
-		if _, ok := opt.(customServerOption); ok {
-			switch opt := opt.(type) {
-			case loggerOpt:
-				srv.logger = opt.logger
-			case onShutdownOpt:
-				srv.onShutdown = opt.f
-			case gwOpt:
-				srv.gwOpts = append(srv.gwOpts, opt.opts...)
-			case notFoundHandlerOpt:
-				srv.router.NotFoundHandler = opt.h
-				srv.gwOpts = append(srv.gwOpts, runtime.WithRoutingErrorHandler(func(ctx context.Context, sm *runtime.ServeMux, m runtime.Marshaler, w http.ResponseWriter, r *http.Request, i int) {
-					if http.StatusNotFound == i {
-						opt.h.ServeHTTP(w, r)
-						return
-					}
-					runtime.DefaultRoutingErrorHandler(ctx, sm, m, w, r, i)
-				}))
-			case apiPrefixOpt:
-				srv.apiPathPrefix = opt.prefix
-			case timeoutOpt:
-				srv.readTimeout = opt.read
-				srv.writeTimeout = opt.write
-			case tlsOpt:
-				srv.tlsCertFile = opt.certFile
-				srv.tlsKeyFile = opt.keyFile
-				srv.secure = true
-				srv.dialOpts = append(srv.dialOpts, opt.dialOpt...)
-			case lisOpt:
-				srv.lis = opt.lis
-				srv.addr = opt.lis.Addr().String()
-				srv.httpLis = opt.httpLis
-				srv.httpAddr = srv.httpLis.Addr().String()
-			case addrOpt:
-				srv.addr = opt.grpcAddr
-				srv.lis = nil
-				srv.httpAddr = opt.httpAddr
-				srv.httpLis = nil
-			case handlerOpt:
-				srv.router.PathPrefix(opt.prefix).Handler(opt.h)
-			case mdwOpt:
-				for _, mdw := range opt.mdws {
-					srv.router.Use(mdw)
-				}
-			case shutdownTimeout:
-				srv.shutdownTimeout = opt.timeout
-			default:
-				// should not happen
-				srv.logger.Log(context.Background(), slog.LevelWarn, "unknown custom server option", "type", fmt.Sprintf("%T", opt))
-			}
+		if customOpt, ok := opt.(customServerOption); ok {
+			srv.applyCustomOption(customOpt)
 		} else {
 			srv.serverOpts = append(srv.serverOpts, opt)
 		}
+	}
+}
+
+func (srv *Server) applyCustomOption(opt customServerOption) {
+	switch opt := opt.(type) {
+	case loggerOpt:
+		srv.logger = opt.logger
+	case onShutdownOpt:
+		srv.onShutdown = opt.f
+	case gwOpt:
+		srv.gwOpts = append(srv.gwOpts, opt.opts...)
+	case notFoundHandlerOpt:
+		srv.router.NotFoundHandler = opt.h
+		srv.gwOpts = append(srv.gwOpts, runtime.WithRoutingErrorHandler(func(ctx context.Context, sm *runtime.ServeMux, m runtime.Marshaler, w http.ResponseWriter, r *http.Request, i int) {
+			if http.StatusNotFound == i {
+				opt.h.ServeHTTP(w, r)
+				return
+			}
+			runtime.DefaultRoutingErrorHandler(ctx, sm, m, w, r, i)
+		}))
+	case apiPrefixOpt:
+		srv.apiPathPrefix = opt.prefix
+	case timeoutOpt:
+		srv.readTimeout = opt.read
+		srv.writeTimeout = opt.write
+	case tlsOpt:
+		srv.tlsCertFile = opt.certFile
+		srv.tlsKeyFile = opt.keyFile
+		srv.secure = true
+		srv.dialOpts = append(srv.dialOpts, opt.dialOpt...)
+	case lisOpt:
+		srv.lis = opt.lis
+		srv.addr = opt.lis.Addr().String()
+		srv.httpLis = opt.httpLis
+		srv.httpAddr = srv.httpLis.Addr().String()
+	case addrOpt:
+		srv.addr = opt.grpcAddr
+		srv.lis = nil
+		srv.httpAddr = opt.httpAddr
+		srv.httpLis = nil
+	case handlerOpt:
+		srv.router.PathPrefix(opt.prefix).Handler(opt.h)
+	case mdwOpt:
+		for _, mdw := range opt.mdws {
+			srv.router.Use(mdw)
+		}
+	case shutdownTimeout:
+		srv.shutdownTimeout = opt.timeout
+	default:
+		// should not happen
+		srv.logger.Log(context.Background(), slog.LevelWarn, "unknown custom server option", "type", fmt.Sprintf("%T", opt))
 	}
 }
 
@@ -219,8 +227,8 @@ func (srv *Server) listenAndServe(ctx context.Context) error {
 		}
 		srv.lis = lis
 	}
-	separatePorts := !srv.useSinglePort()
-	if separatePorts && srv.httpLis == nil {
+	useSeparateAddresses := !srv.useSingleAddress()
+	if useSeparateAddresses && srv.httpLis == nil {
 		lis, err := net.Listen("tcp", srv.httpAddr)
 		if err != nil {
 			return err
@@ -233,7 +241,7 @@ func (srv *Server) listenAndServe(ctx context.Context) error {
 
 	// start servers
 	switch {
-	case separatePorts:
+	case useSeparateAddresses:
 		// start grpc server
 		go func() {
 			errs <- srv.grpcServer().Serve(srv.lis)
@@ -242,19 +250,19 @@ func (srv *Server) listenAndServe(ctx context.Context) error {
 		// start http server
 		go func() {
 			if srv.secure {
-				errs <- srv.httpSrv.ServeTLS(srv.httpLis, srv.tlsCertFile, srv.tlsKeyFile)
+				errs <- srv.httpServer().ServeTLS(srv.httpLis, srv.tlsCertFile, srv.tlsKeyFile)
 				return
 			}
-			errs <- srv.httpSrv.Serve(srv.httpLis)
+			errs <- srv.httpServer().Serve(srv.httpLis)
 		}()
 		srv.logger.Log(ctx, slog.LevelInfo, "HTTP server started", "http_address", srv.httpAddr)
 	default:
 		go func() {
 			if srv.secure {
-				errs <- srv.httpSrv.ServeTLS(srv.lis, srv.tlsCertFile, srv.tlsKeyFile)
+				errs <- srv.httpServer().ServeTLS(srv.lis, srv.tlsCertFile, srv.tlsKeyFile)
 				return
 			}
-			errs <- srv.httpSrv.Serve(srv.lis)
+			errs <- srv.httpServer().Serve(srv.lis)
 		}()
 		srv.logger.Log(ctx, slog.LevelInfo, "HTTP & GRPC server started", slog.String("address", srv.addr))
 	}
@@ -291,52 +299,58 @@ func (srv *Server) shutdown(ctx context.Context) error {
 	if srv.grpcSrv != nil {
 		srv.grpcServer().GracefulStop()
 	}
-	return srv.httpSrv.Shutdown(newCtx)
+	return srv.httpServer().Shutdown(newCtx)
 }
 
 func (srv *Server) registerServices(ctx context.Context, services ...any) error {
 	for _, s := range services {
+		serviceDetails := []string{}
 		valid := false
 		if h, ok := s.(service); ok {
 			h.Register(srv.grpcServer())
 			valid = true
+			serviceDetails = append(serviceDetails, "gRPC")
 		} else if h, ok := s.(serviceDescriptor); ok {
 			srv.grpcServer().RegisterService(h.ServiceDesc(), h)
 			valid = true
+			serviceDetails = append(serviceDetails, "gRPC")
 		}
 		if h, ok := s.(grpcEndpoint); ok {
 			if err := h.RegisterWithEndpoint(ctx, srv.grpcGWServer(), srv.addr, srv.dialOpts); err != nil {
 				return err
 			}
 			valid = true
+			serviceDetails = append(serviceDetails, "gRPC Gateway")
 		}
 		if h, ok := s.(httpHandler); ok {
 			prefix, h := h.HTTPHandler()
 			srv.router.PathPrefix(prefix).Handler(h)
 			valid = true
+			serviceDetails = append(serviceDetails, "HTTP "+prefix)
 		} else if h, ok := s.(http.Handler); ok {
 			srv.router.Handle("/", h)
 			valid = true
+			serviceDetails = append(serviceDetails, "HTTP /")
 		}
 		if !valid {
 			return ErrUnknownServiceType
 		}
-		srv.logger.Log(ctx, slog.LevelInfo, "registered service successfully", "name", getTypeName(s))
+		srv.logger.Log(ctx, slog.LevelInfo, "registered service successfully", "name", getTypeName(s), "details", serviceDetails)
 	}
 	srv.router.PathPrefix(srv.apiPathPrefix).Handler(srv.grpcGWServer())
 	return nil
 }
 
 func (srv *Server) handler() http.Handler {
-	if srv.useSinglePort() {
-		return srv.singlePortHandler()
+	if srv.useSingleAddress() {
+		return srv.singleAddressHandler()
 	}
 	return srv.router
 }
 
-// singlePortHandler returns an http.Handler that delegates to grpcServer on incoming gRPC
+// singleAddressHandler returns an http.Handler that delegates to grpcServer on incoming gRPC
 // connections or otherHandler otherwise.
-func (srv *Server) singlePortHandler() http.Handler {
+func (srv *Server) singleAddressHandler() http.Handler {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
 			srv.grpcServer().ServeHTTP(w, r)
@@ -353,7 +367,7 @@ func (srv *Server) singlePortHandler() http.Handler {
 	return h2c.NewHandler(h, srv.http2Srv)
 }
 
-func (srv *Server) useSinglePort() bool {
+func (srv *Server) useSingleAddress() bool {
 	_, port1, err1 := net.SplitHostPort(srv.addr)
 	_, port2, err2 := net.SplitHostPort(srv.httpAddr)
 	return err1 == nil && err2 == nil && port1 == port2
