@@ -2,12 +2,11 @@ package nats
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 
 	"github.com/nats-io/nats.go"
 	"github.com/pthethanh/nano/broker"
-
-	json "github.com/bytedance/sonic"
 )
 
 type (
@@ -25,24 +24,14 @@ type (
 	logger interface {
 		Log(ctx context.Context, level slog.Level, msg string, args ...any)
 	}
-
-	// Codec defines the interface gRPC uses to encode and decode messages.  Note
-	// that implementations of this interface must be thread safe; a Codec's
-	// methods can be called from concurrent goroutines.
-	codec interface {
-		// Marshal returns the wire format of v.
-		Marshal(v any) ([]byte, error)
-		// Unmarshal parses the wire format into v.
-		Unmarshal(data []byte, v any) error
-	}
 	JSONCodec struct{}
 )
 
-func (m JSONCodec) Marshal(v interface{}) ([]byte, error) {
+func (m JSONCodec) Marshal(v any) ([]byte, error) {
 	return json.Marshal(v)
 }
 
-func (m JSONCodec) Unmarshal(data []byte, v interface{}) error {
+func (m JSONCodec) Unmarshal(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }
 

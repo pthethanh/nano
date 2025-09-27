@@ -18,7 +18,7 @@ type (
 		log  logger
 
 		addrs string
-		codec codec
+		codec broker.Codec
 	}
 
 	// Option is an optional configuration.

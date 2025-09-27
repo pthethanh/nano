@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+spec:
+  type: NodePort
+  ports:
+    - port: 9092
+      targetPort: 9092
+      nodePort: 30092
+  selector:
+    app: kafka
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+        - name: kafka
+          image: bitnami/kafka:3.7.0
+          env:
+            - name: KAFKA_CFG_NODE_ID
+              value: "0"
+            - name: KAFKA_CFG_PROCESS_ROLES
+              value: "broker,controller"
+            - name: KAFKA_CFG_CONTROLLER_QUORUM_VOTERS
+              value: "0@localhost:9093"
+            - name: KAFKA_CFG_LISTENERS
+              value: "PLAINTEXT://:9092,CONTROLLER://:9093"
+            - name: KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+            - name: KAFKA_CFG_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+            - name: KAFKA_CFG_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://localhost:9092"
+            - name: KAFKA_CFG_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+            - name: KAFKA_ENABLE_KRAFT
+              value: "yes"
+            - name: ALLOW_PLAINTEXT_LISTENER
+              value: "yes"
+          ports:
+            - containerPort: 9092
+            - containerPort: 9093

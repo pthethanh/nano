@@ -65,6 +65,16 @@ type (
 		// Returns an error if unsubscription fails.
 		Unsubscribe() error
 	}
+
+	// Codec defines the interface for broker to encode and decode messages. Note
+	// that implementations of this interface must be thread safe; a Codec's
+	// methods can be called from concurrent goroutines.
+	Codec interface {
+		// Marshal returns the wire format of v.
+		Marshal(v any) ([]byte, error)
+		// Unmarshal parses the wire format into v.
+		Unmarshal(data []byte, v any) error
+	}
 )
 
 const (

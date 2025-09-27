@@ -14,7 +14,7 @@ import (
 type Broker[T any] struct {
 	addrs            []string
 	conf             *sarama.Config
-	codec            codec
+	codec            broker.Codec
 	log              logger
 	async            bool
 	onPublishFailure func(*PublishError)
@@ -167,6 +167,7 @@ func (k *Broker[T]) Subscribe(ctx context.Context, topic string, handler func(br
 			case err := <-consumer.Errors():
 				if err != nil {
 					handler(&event[T]{
+						topic:  topic,
 						err:    err,
 						reason: broker.ReasonSubscriptionFailure,
 					})
@@ -181,6 +182,7 @@ func (k *Broker[T]) Subscribe(ctx context.Context, topic string, handler func(br
 				default:
 					handler(&event[T]{
 						err:    err,
+						topic:  topic,
 						reason: broker.ReasonSubscriptionFailure,
 					})
 				}

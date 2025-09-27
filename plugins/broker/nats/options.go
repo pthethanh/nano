@@ -2,10 +2,11 @@ package nats
 
 import (
 	"github.com/nats-io/nats.go"
+	"github.com/pthethanh/nano/broker"
 )
 
 // Codec is an option to provide a custom codec.
-func Codec[T any](codec codec) Option[T] {
+func Codec[T any](codec broker.Codec) Option[T] {
 	return func(opts *Nats[T]) {
 		opts.codec = codec
 	}

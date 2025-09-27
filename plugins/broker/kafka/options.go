@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"github.com/IBM/sarama"
+	"github.com/pthethanh/nano/broker"
 )
 
 type Option[T any] func(*Broker[T])
@@ -40,7 +41,7 @@ func OnAsyncPublishSuccess[T any](f func(*T)) Option[T] {
 	}
 }
 
-func Codec[T any](c codec) Option[T] {
+func Codec[T any](c broker.Codec) Option[T] {
 	return func(b *Broker[T]) {
 		b.codec = c
 	}

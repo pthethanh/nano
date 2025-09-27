@@ -1,4 +1,4 @@
-go 1.24
+go 1.24.5
 
 use .
 
@@ -9,5 +9,7 @@ use ./examples/kafka
 use ./plugins/broker/nats
 
 use ./plugins/broker/kafka
+
+use ./plugins/broker/watermill
 
 use ./examples/helloworld

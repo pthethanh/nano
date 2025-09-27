@@ -1,6 +1,6 @@
 module github.com/pthethanh/nano/plugins/broker/kafka
 
-go 1.23.1
+go 1.24.5
 
 require (
 	github.com/IBM/sarama v1.42.1

@@ -1,6 +1,6 @@
 module github.com/pthethanh/nano/cmd/protoc-gen-nano
 
-go 1.24
+go 1.24.5
 
 require google.golang.org/protobuf v1.36.6
 

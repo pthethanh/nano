@@ -1,6 +1,6 @@
 module github.com/pthethanh/nano
 
-go 1.24
+go 1.24.5
 
 require (
 	github.com/fsnotify/fsnotify v1.9.0

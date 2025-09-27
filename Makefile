@@ -33,6 +33,8 @@ mod_tidy:
 build_plugins:
 	$(MAKE) -C  cmd/protoc-gen-nano
 	$(MAKE) -C  plugins/broker/nats
+	$(MAKE) -C  plugins/broker/kafka
+	$(MAKE) -C  plugins/broker/watermill
 	$(MAKE) -C  examples/helloworld
 	$(MAKE) -C  examples/kafka
 
