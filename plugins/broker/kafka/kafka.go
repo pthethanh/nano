@@ -176,10 +176,12 @@ func (k *Broker[T]) Subscribe(ctx context.Context, topic string, handler func(br
 				err := consumer.Consume(ctx, topics, consumerHandler)
 				switch err {
 				case nil:
+					// everything is ok, continue
 					continue
 				case sarama.ErrClosedConsumerGroup:
 					return
 				default:
+					// report error to handler
 					handler(&event[T]{
 						err:    err,
 						topic:  topic,

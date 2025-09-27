@@ -2,9 +2,9 @@ package kafka
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 
-	json "github.com/bytedance/sonic"
 	"github.com/pthethanh/nano/broker"
 )
 

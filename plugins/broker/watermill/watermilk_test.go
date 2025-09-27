@@ -2,6 +2,7 @@ package watermill
 
 import (
 	"context"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -21,7 +22,9 @@ type testMsg struct {
 func TestWatermillBrokerWithKafka(t *testing.T) {
 	brokers := []string{"localhost:9092"}
 	topic := "test-watermill-broker"
-
+	if os.Getenv("KAFKA_TEST") == "" {
+		t.Skip("Set KAFKA_TEST=1 to run this test (requires local Kafka on :9092)")
+	}
 	pub, err := kafka.NewPublisher(
 		kafka.PublisherConfig{
 			Brokers:   brokers,
@@ -37,7 +40,7 @@ func TestWatermillBrokerWithKafka(t *testing.T) {
 		kafka.SubscriberConfig{
 			Brokers:       brokers,
 			Unmarshaler:   kafka.DefaultMarshaler{},
-			ConsumerGroup: "",
+			ConsumerGroup: "test",
 			InitializeTopicDetails: &sarama.TopicDetail{
 				NumPartitions:     1,
 				ReplicationFactor: 1,
@@ -62,6 +65,7 @@ func TestWatermillBrokerWithKafka(t *testing.T) {
 	if err != nil {
 		t.Fatalf("subscribe failed: %v", err)
 	}
+	time.Sleep(5 * time.Second) // wait for consumer to be ready
 	msg := &testMsg{ID: "1", Data: "hello watermill"}
 	log.Info("message publishing...", "msg", msg)
 	if err := b.Publish(ctx, topic, msg); err != nil {
@@ -72,11 +76,11 @@ func TestWatermillBrokerWithKafka(t *testing.T) {
 	select {
 	case got := <-received:
 		if got.ID != msg.ID || got.Data != msg.Data {
-			t.Fatalf("----------------------------->>>>>>received message does not match: got %+v, want %+v", got, msg)
+			t.Fatalf("received message does not match: got %+v, want %+v", got, msg)
 		}
 		atomic.AddInt64(&c, 1)
 	case <-ctx.Done():
-		t.Fatal("----------------------------->>>>>>did not receive message in time")
+		t.Fatal("did not receive message in time")
 	}
 	log.Info("test completed", "count", c)
 }

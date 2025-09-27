@@ -3,14 +3,13 @@ module github.com/pthethanh/nano/plugins/broker/watermill
 go 1.24.5
 
 require (
+	github.com/Shopify/sarama v1.38.0
 	github.com/ThreeDotsLabs/watermill v1.5.1
 	github.com/ThreeDotsLabs/watermill-kafka/v2 v2.5.0
-	github.com/google/uuid v1.6.0
 	github.com/pthethanh/nano v0.0.2
 )
 
 require (
-	github.com/Shopify/sarama v1.38.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/eapache/go-resiliency v1.3.0 // indirect
 	github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21 // indirect
@@ -18,6 +17,7 @@ require (
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
