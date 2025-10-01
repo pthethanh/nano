@@ -35,9 +35,15 @@ func (g *nano) Generate(file *generator.FileDescriptor) {
 	if len(file.FileDescriptorProto.Service) == 0 {
 		return
 	}
-	for i, service := range file.FileDescriptorProto.Service {
-		g.generateService(file, service, i)
+	g.generateVars()
+	for _, service := range file.FileDescriptorProto.Service {
+		g.generateService(service)
+		g.generateUtils(service)
 	}
+}
+
+func (g *nano) generateVars() {
+	g.P("var _ = context.TODO")
 }
 
 // GenerateImports generates the import declaration for this file.
@@ -48,23 +54,21 @@ func (g *nano) GenerateImports(file *generator.FileDescriptor, imports map[gener
 	g.P("import (")
 	g.P("grpc ", `"google.golang.org/grpc"`)
 	g.P(`"github.com/pthethanh/nano/grpc/client"`)
+	g.P(`"context"`)
 	if g.gen.GenGW {
-		g.P(`"context"`)
 		g.P("grpc ", `"google.golang.org/grpc"`)
 		g.P(`"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"`)
 	}
 	g.P(")")
 	g.P()
+
 }
 
 // generateService generates all the code for the named service.
-func (g *nano) generateService(file *generator.FileDescriptor, service *pb.ServiceDescriptorProto, index int) {
-
+func (g *nano) generateService(service *pb.ServiceDescriptorProto) {
 	origServiceName := service.GetName()
-
 	serviceName := generator.CamelCase(origServiceName)
 	clientName := strings.ToLower(string(serviceName[0])) + string(serviceName[1:])
-
 	serviceAlias := "Unimplemented" + serviceName + "Server"
 
 	g.P("func (", serviceAlias, ") ServiceDesc() *grpc.ServiceDesc{")
@@ -88,4 +92,11 @@ func (g *nano) generateService(file *generator.FileDescriptor, service *pb.Servi
 	g.P("cc: client.MustNew(ctx, addr, opts...),")
 	g.P("}")
 	g.P("}")
+}
+
+func (g *nano) generateUtils(service *pb.ServiceDescriptorProto) {
+	if !g.gen.GenUtils {
+		return
+	}
+	// TODO: generate utilities
 }

@@ -74,7 +74,24 @@ var (
 	DefaultAddress = ":8000"
 )
 
-// New creates a new gRPC server.
+// New creates a new Server instance with the provided server options.
+//
+// By default, the server will listen on DefaultAddress (":8000") for both gRPC and HTTP traffic.
+// You can customize the address, logging, TLS, shutdown behavior, and other options using custom server options.
+//
+// Example usage:
+//
+//	srv := server.New(
+//	    server.Address(":8081"),
+//	    server.Logger(myLogger),
+//	    // ...other options...
+//	)
+//
+// Note:
+// - Serving both gRPC and HTTP on the same address is supported by default, but has some limitations for advanced gRPC features (e.g., retry, load balancing).
+// - For production, it is recommended to use separate addresses for gRPC and HTTP using the SeparateAddresses option.
+//
+// See the package documentation and option types for more details.
 func New(opts ...grpc.ServerOption) *Server {
 	srv := &Server{
 		addr:            DefaultAddress,

@@ -435,7 +435,8 @@ type Generator struct {
 	pathType         pathType // How to generate output filenames.
 	writeOutput      bool
 
-	GenGW bool
+	GenGW    bool
+	GenUtils bool
 }
 
 type pathType int
@@ -512,6 +513,8 @@ func (g *Generator) CommandLineParameters(parameter string) {
 			pluginList = v
 		case "generate_gateway":
 			g.GenGW, _ = strconv.ParseBool(v)
+		case "generate_utils":
+			g.GenUtils, _ = strconv.ParseBool(v)
 		default:
 			if len(k) > 0 && k[0] == 'M' {
 				g.ImportMap[k[1:]] = v
@@ -1297,7 +1300,6 @@ func (g *Generator) generateImported(id *ImportedDescriptor) {
 	for _, sym := range df.exported[id.o] {
 		sym.GenerateAlias(g, filename, g.GoPackageName(df.importPath))
 	}
-
 	g.P()
 }
 

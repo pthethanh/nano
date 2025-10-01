@@ -47,6 +47,7 @@ gen_proto:
 	 --go_out $(PROTO_OUT) \
 	 --nano_out $(PROTO_OUT) \
 	 --nano_opt generate_gateway=true \
+	 --nano_opt generate_utils=false \
 	 --go-grpc_out $(PROTO_OUT) \
 	 --grpc-gateway_out $(PROTO_OUT) \
      --grpc-gateway_opt logtostderr=true \
