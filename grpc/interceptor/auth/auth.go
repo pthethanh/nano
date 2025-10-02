@@ -49,7 +49,7 @@ func StreamInterceptor(auth Authenticator) grpc.StreamServerInterceptor {
 		if err != nil {
 			return err
 		}
-		return handler(srv, newContextServerStream(newCtx, ss))
+		return handler(srv, &contextServerStream{ctx: newCtx, ServerStream: ss})
 	}
 }
 
@@ -81,17 +81,4 @@ type contextServerStream struct {
 // Context returns the wrapped context for the server stream.
 func (w *contextServerStream) Context() context.Context {
 	return w.ctx
-}
-
-// newContextServerStream returns a ServerStream with the new context.
-// If the stream is already a ContextServerStream, it returns the existing one.
-// This is useful for interceptors that need to modify the context.
-func newContextServerStream(ctx context.Context, stream grpc.ServerStream) grpc.ServerStream {
-	if existing, ok := stream.(*contextServerStream); ok {
-		return existing
-	}
-	return &contextServerStream{
-		ServerStream: stream,
-		ctx:          ctx,
-	}
 }

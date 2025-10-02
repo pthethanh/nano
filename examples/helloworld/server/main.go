@@ -69,11 +69,11 @@ func main() {
 		server.Logger(log.Default()),
 		grpc.ChainUnaryInterceptor(
 			recovery.UnaryServerInterceptor(),
-			server.ContextUnaryInterceptor(logging.ServerContextLogger(log.AppendToContext, map[string]func() string{
+			server.ContextUnaryInterceptor(logging.ServerContextLogger(log.AppendToContext, map[string]any{
 				"x-request-id": uuid.NewString,
 			})),
-			logging.UnaryServerInterceptor(log.Default(), logging.LogMethod(log.AppendToContext), logging.LogRequest(true), logging.LogReply(true)),
-			grpc.UnaryServerInterceptor(metricsInterceptor(metricSrv)),
+			logging.UnaryServerInterceptor(log.Default(), logging.All()),
+			metricsInterceptor(metricSrv),
 		),
 		server.OnShutdown(func() { log.Info("cleaning up & saying goodbye....") }),
 	)

@@ -24,18 +24,22 @@ type (
 // If a metadata key is not present, it uses the default value provided in attrsWithDefault.
 // This function can be used with server.ContextUnaryInterceptor or server.ContextStreamInterceptor
 // to enrich the context with logging attributes for each request.
-func ServerContextLogger(appendToContext AppendToContextFunc, attrsWithDefault map[string]func() string) func(ctx context.Context) (context.Context, error) {
-	return func(ctx context.Context) (context.Context, error) {
-		newCtx := ctx
-		for key, def := range attrsWithDefault {
-			if vs := metadata.ValueFromIncomingContext(ctx, key); len(vs) > 0 {
-				newCtx = appendToContext(newCtx, key, getValue(vs))
-				continue
-			}
-			newCtx = appendToContext(newCtx, key, def())
-		}
-		return newCtx, nil
-	}
+// Default values can be static values or functions that return a value (any, string).
+func ServerContextLogger(appendToContext AppendToContextFunc, attrsWithDefault map[string]any) func(ctx context.Context) (context.Context, error) {
+	return contextLogger(appendToContext, metadata.ValueFromIncomingContext, attrsWithDefault)
+}
+
+// ClientContextLogger returns a function that extracts logging attributes from gRPC metadata
+// and appends them to the context using the provided appendToContext function.
+// If a metadata key is not present, it uses the default value provided in attrsWithDefault.
+// This function can be used with client.ContextUnaryInterceptor or client.ContextStreamInterceptor
+// to enrich the context with logging attributes for each request.
+// Default values can be static values or functions that return a value (any, string).
+func ClientContextLogger(appendToContext AppendToContextFunc, attrsWithDefault map[string]any) func(ctx context.Context) (context.Context, error) {
+	return contextLogger(appendToContext, func(ctx context.Context, key string) []string {
+		md, _ := metadata.FromOutgoingContext(ctx)
+		return md[key]
+	}, attrsWithDefault)
 }
 
 // UnaryClientInterceptor returns a gRPC unary client interceptor that logs requests and responses.
@@ -47,30 +51,29 @@ func UnaryClientInterceptor(logger logger, opts ...Option) grpc.UnaryClientInter
 		t := time.Now()
 		o := newOpts(opts...)
 		newCtx := ctx
-		appendedContext := o.appendToContext != nil
-		if o.logMethod && o.appendToContext != nil {
-			newCtx = o.appendToContext(ctx, "grpc.method", method)
+		attrs := []any{}
+		if o.logMethod {
+			attrs = append(attrs, "grpc.method", method)
 		}
 		if o.logRequest {
-			attrs := []any{"grpc.request", req}
-			if o.logMethod && !appendedContext {
-				attrs = append(attrs, "grpc.method", method)
-			}
-			logger.Log(newCtx, slog.LevelInfo, "Sent gRPC request", attrs...)
+			attrs = append(attrs, "grpc.request", req)
 		}
-		if o.logReply {
+		if len(attrs) > 0 {
+			logger.Log(newCtx, slog.LevelInfo, "sent grpc request", attrs...)
+		}
+		if o.logResponse {
 			defer func() {
-				attrs := []any{"grpc.reply", reply}
-				if err != nil {
-					attrs = append(attrs, "grpc.error", err)
+				attrs := []any{}
+				if o.logMethod {
+					attrs = append(attrs, "grpc.method", method)
 				}
+				attrs = append(attrs, "grpc.response", reply)
+				attrs = append(attrs, "grpc.error", err)
 				if o.logDuration {
 					attrs = append(attrs, "grpc.duration", time.Since(t).String())
 				}
-				if o.logMethod && !appendedContext {
-					attrs = append(attrs, "grpc.method", method)
-				}
-				logger.Log(newCtx, slog.LevelInfo, "Received gRPC reply", attrs...)
+
+				logger.Log(newCtx, slog.LevelInfo, "received grpc response", attrs...)
 			}()
 		}
 		return invoker(ctx, method, req, reply, cc, callOpts...)
@@ -93,30 +96,29 @@ func UnaryServerInterceptor(logger logger, opts ...Option) grpc.UnaryServerInter
 		t := time.Now()
 		o := newOpts(opts...)
 		newCtx := ctx
-		appendedContext := o.appendToContext != nil
-		if o.logMethod && o.appendToContext != nil {
-			newCtx = o.appendToContext(ctx, "grpc.method", info.FullMethod)
+		attrs := []any{}
+		if o.logMethod {
+			attrs = append(attrs, "grpc.method", info.FullMethod)
 		}
 		if o.logRequest {
-			attrs := []any{"grpc.request", req}
-			if o.logMethod && !appendedContext {
-				attrs = append(attrs, "grpc.method", info.FullMethod)
-			}
-			logger.Log(newCtx, slog.LevelInfo, "Received gRPC request", attrs...)
+			attrs = append(attrs, "grpc.request", req)
 		}
-		if o.logReply {
+		if len(attrs) > 0 {
+			logger.Log(newCtx, slog.LevelInfo, "received grpc request", attrs...)
+		}
+		if o.logResponse {
 			defer func() {
-				attrs := []any{"grpc.reply", res}
-				if err != nil {
-					attrs = append(attrs, "grpc.error", err)
+				attrs := []any{}
+				if o.logMethod {
+					attrs = append(attrs, "grpc.method", info.FullMethod)
 				}
+				attrs = append(attrs, "grpc.response", res)
+				attrs = append(attrs, "grpc.error", err)
 				if o.logDuration {
 					attrs = append(attrs, "grpc.duration", time.Since(t).String())
 				}
-				if o.logMethod && !appendedContext {
-					attrs = append(attrs, "grpc.method", info.FullMethod)
-				}
-				logger.Log(newCtx, slog.LevelInfo, "Sent gRPC reply", attrs...)
+
+				logger.Log(newCtx, slog.LevelInfo, "sent grpc response", attrs...)
 			}()
 		}
 		res, err = handler(newCtx, req)
@@ -139,4 +141,29 @@ func getValue(vs []string) string {
 		return vs[0]
 	}
 	return fmt.Sprintf("[%s]", strings.Join(vs, ","))
+}
+
+func contextLogger(appendToContext AppendToContextFunc, metaFunc func(ctx context.Context, key string) []string, attrsWithDefault map[string]any) func(ctx context.Context) (context.Context, error) {
+	return func(ctx context.Context) (context.Context, error) {
+		newCtx := ctx
+		for key, def := range attrsWithDefault {
+			if vs := metaFunc(ctx, key); len(vs) > 0 {
+				newCtx = appendToContext(newCtx, key, getValue(vs))
+				continue
+			}
+			if def != nil {
+				if defFunc, ok := def.(func() any); ok {
+					newCtx = appendToContext(newCtx, key, defFunc())
+				} else if defFunc, ok := def.(func() string); ok {
+					newCtx = appendToContext(newCtx, key, defFunc())
+				} else {
+					newCtx = appendToContext(newCtx, key, def)
+				}
+			} else {
+				newCtx = appendToContext(newCtx, key, "")
+			}
+
+		}
+		return newCtx, nil
+	}
 }
