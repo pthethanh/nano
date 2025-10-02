@@ -6,14 +6,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
 	"github.com/pthethanh/nano/examples/helloworld/api"
 	"github.com/pthethanh/nano/grpc/health"
+	"github.com/pthethanh/nano/grpc/interceptor/logging"
+	"github.com/pthethanh/nano/grpc/interceptor/recovery"
 	"github.com/pthethanh/nano/grpc/server"
 	"github.com/pthethanh/nano/log"
 	"github.com/pthethanh/nano/metric/memory"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 )
 
 type (
@@ -27,19 +27,6 @@ func (*HelloServer) SayHello(ctx context.Context, req *api.HelloRequest) (*api.H
 	return &api.HelloResponse{
 		Message: "Hello " + req.Name,
 	}, nil
-}
-
-func loggerInterceptor(ctx context.Context) (context.Context, error) {
-	if ids := metadata.ValueFromIncomingContext(ctx, "x-request-id"); len(ids) > 0 {
-		return log.AppendToContext(ctx, "x-request-id", ids[0]), nil
-	}
-	return log.AppendToContext(ctx, "x-request-id", uuid.NewString()), nil
-}
-
-func recoverInterceptor(ctx context.Context) {
-	if err := recover(); err != nil {
-		log.ErrorContext(ctx, "recovered from panic", "error", err)
-	}
 }
 
 func metricsInterceptor(metricSrv *memory.Reporter) grpc.UnaryServerInterceptor {
@@ -81,8 +68,11 @@ func main() {
 		//server.SeparateAddresses(":8081", ":8082"),
 		server.Logger(log.Default()),
 		grpc.ChainUnaryInterceptor(
-			server.ContextUnaryInterceptor(loggerInterceptor),
-			server.DeferContextUnaryInterceptor(recoverInterceptor),
+			recovery.UnaryServerInterceptor(),
+			server.ContextUnaryInterceptor(logging.ServerContextLogger(log.AppendToContext, map[string]func() string{
+				"x-request-id": uuid.NewString,
+			})),
+			logging.UnaryServerInterceptor(log.Default(), logging.LogMethod(log.AppendToContext), logging.LogRequest(true), logging.LogReply(true)),
 			grpc.UnaryServerInterceptor(metricsInterceptor(metricSrv)),
 		),
 		server.OnShutdown(func() { log.Info("cleaning up & saying goodbye....") }),
