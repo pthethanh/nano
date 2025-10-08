@@ -11,6 +11,10 @@ const (
 	AuthorizationMD = "authorization"
 )
 
+var (
+	_ Authenticator = AuthenticatorFunc(nil)
+)
+
 // Authenticator defines the interface to perform the actual
 // authentication of the request. Implementations should fetch
 // the required data from the context.Context object. GRPC specific
