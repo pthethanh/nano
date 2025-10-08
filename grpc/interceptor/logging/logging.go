@@ -50,40 +50,27 @@ func UnaryClientInterceptor(logger logger, opts ...Option) grpc.UnaryClientInter
 	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, callOpts ...grpc.CallOption) (err error) {
 		t := time.Now()
 		o := newOpts(opts...)
-		newCtx := ctx
-		attrs := []any{}
-		if o.logMethod {
-			attrs = append(attrs, "grpc.method", method)
-		}
-		if o.logRequest {
-			attrs = append(attrs, "grpc.request", req)
-		}
-		if len(attrs) > 0 {
-			logger.Log(newCtx, slog.LevelInfo, "sent grpc request", attrs...)
-		}
-		if o.logResponse {
-			defer func() {
-				attrs := []any{}
-				if o.logMethod {
-					attrs = append(attrs, "grpc.method", method)
-				}
-				attrs = append(attrs, "grpc.response", reply)
-				attrs = append(attrs, "grpc.error", err)
-				if o.logDuration {
-					attrs = append(attrs, "grpc.duration", time.Since(t).String())
-				}
-
-				logger.Log(newCtx, slog.LevelInfo, "received grpc response", attrs...)
-			}()
-		}
+		logRequest(logger, ctx, "sent grpc request", o, method, req)
+		defer func() {
+			logResponse(logger, ctx, "received grpc response", o, method, reply, err, time.Since(t))
+		}()
 		return invoker(ctx, method, req, reply, cc, callOpts...)
 	}
 }
 
+// StreamClientInterceptor returns a gRPC stream client interceptor that logs stream creation.
+// It uses the provided logger to log messages when a stream is created.
+// The behavior of the interceptor can be customized using options such as logging the method name and duration.
 func StreamClientInterceptor(logger logger, opts ...Option) grpc.StreamClientInterceptor {
-	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, callOpts ...grpc.CallOption) (grpc.ClientStream, error) {
-		// TODO implement logging for streaming RPCs
-		return streamer(ctx, desc, cc, method, callOpts...)
+	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, callOpts ...grpc.CallOption) (stream grpc.ClientStream, err error) {
+		t := time.Now()
+		o := newOpts(opts...)
+		logRequest(logger, ctx, "creating grpc client stream", o, method, nil)
+		defer func() {
+			logResponse(logger, ctx, "created grpc client stream", o, method, nil, err, time.Since(t))
+		}()
+		stream, err = streamer(ctx, desc, cc, method, callOpts...)
+		return stream, err
 	}
 }
 
@@ -95,41 +82,29 @@ func UnaryServerInterceptor(logger logger, opts ...Option) grpc.UnaryServerInter
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (res any, err error) {
 		t := time.Now()
 		o := newOpts(opts...)
-		newCtx := ctx
-		attrs := []any{}
-		if o.logMethod {
-			attrs = append(attrs, "grpc.method", info.FullMethod)
-		}
-		if o.logRequest {
-			attrs = append(attrs, "grpc.request", req)
-		}
-		if len(attrs) > 0 {
-			logger.Log(newCtx, slog.LevelInfo, "received grpc request", attrs...)
-		}
-		if o.logResponse {
-			defer func() {
-				attrs := []any{}
-				if o.logMethod {
-					attrs = append(attrs, "grpc.method", info.FullMethod)
-				}
-				attrs = append(attrs, "grpc.response", res)
-				attrs = append(attrs, "grpc.error", err)
-				if o.logDuration {
-					attrs = append(attrs, "grpc.duration", time.Since(t).String())
-				}
-
-				logger.Log(newCtx, slog.LevelInfo, "sent grpc response", attrs...)
-			}()
-		}
-		res, err = handler(newCtx, req)
+		logRequest(logger, ctx, "received grpc request", o, info.FullMethod, req)
+		defer func() {
+			logResponse(logger, ctx, "sent grpc response", o, info.FullMethod, res, err, time.Since(t))
+		}()
+		res, err = handler(ctx, req)
 		return res, err
 	}
 }
 
+// StreamServerInterceptor returns a gRPC stream server interceptor that logs stream creation.
+// It uses the provided logger to log messages when a stream is created.
+// The behavior of the interceptor can be customized using options such as logging the method name and duration.
 func StreamServerInterceptor(logger logger, opts ...Option) grpc.StreamServerInterceptor {
-	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		// TODO implement logging for streaming RPCs
-		return handler(srv, ss)
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
+		t := time.Now()
+		o := newOpts(opts...)
+		ctx := ss.Context()
+		logRequest(logger, ctx, "creating grpc server stream", o, info.FullMethod, nil)
+		defer func() {
+			logResponse(logger, ctx, "created grpc server stream", o, info.FullMethod, nil, err, time.Since(t))
+		}()
+		err = handler(srv, ss)
+		return err
 	}
 }
 
@@ -166,4 +141,30 @@ func contextLogger(appendToContext AppendToContextFunc, metaFunc func(ctx contex
 		}
 		return newCtx, nil
 	}
+}
+
+// logRequest logs the initial request with the specified method and request data.
+func logRequest(logger logger, ctx context.Context, msg string, o *options, method string, req any) {
+	attrs := []any{}
+	if o.logMethod {
+		attrs = append(attrs, "grpc.method", method)
+	}
+	if o.logRequest {
+		attrs = append(attrs, "grpc.request", req)
+	}
+	logger.Log(ctx, slog.LevelInfo, msg, attrs...)
+}
+
+// logResponse logs the response with the specified method, response data, error, and duration.
+func logResponse(logger logger, ctx context.Context, msg string, o *options, method string, res any, err error, duration time.Duration) {
+	attrs := []any{}
+	if o.logMethod {
+		attrs = append(attrs, "grpc.method", method)
+	}
+	attrs = append(attrs, "grpc.response", res)
+	attrs = append(attrs, "grpc.error", err)
+	if o.logDuration {
+		attrs = append(attrs, "grpc.duration", duration.String())
+	}
+	logger.Log(ctx, slog.LevelInfo, msg, attrs...)
 }
