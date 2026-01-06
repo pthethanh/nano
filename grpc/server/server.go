@@ -99,6 +99,8 @@ func New(opts ...grpc.ServerOption) *Server {
 		router:          mux.NewRouter(),
 		apiPathPrefix:   "/",
 		shutdownTimeout: -1,
+		dialOpts:        []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())},
+		gwOpts:          []runtime.ServeMuxOption{WithIncomingHeaderMatcher(defaultGWPassthroughHeaders)},
 	}
 	srv.apply(opts...)
 	return srv
@@ -118,8 +120,6 @@ func (srv *Server) httpServer() *http.Server {
 
 func (srv *Server) grpcGWServer() *runtime.ServeMux {
 	if srv.grpcGw == nil {
-		srv.dialOpts = append(srv.dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		srv.gwOpts = append(srv.gwOpts, WithIncomingHeaderMatcher(defaultGWPassthroughHeaders))
 		srv.grpcGw = runtime.NewServeMux(srv.gwOpts...)
 	}
 	return srv.grpcGw
