@@ -6,19 +6,28 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-type tokenCredentials string
+type tokenCredentials struct {
+	token  string
+	secure bool
+}
 
 // NewTokenCredentials returns a PerRPCCredentials using the provided token.
-func NewTokenCredentials(token string) credentials.PerRPCCredentials {
-	return tokenCredentials(token)
+func NewTokenCredentials(token string, secure ...bool) credentials.PerRPCCredentials {
+	cred := tokenCredentials{
+		token: token,
+	}
+	if len(secure) > 0 {
+		cred.secure = secure[0]
+	}
+	return cred
 }
 
 func (tok tokenCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
 	return map[string]string{
-		"authorization": string(tok),
+		"authorization": tok.token,
 	}, nil
 }
 
 func (tok tokenCredentials) RequireTransportSecurity() bool {
-	return false
+	return tok.secure
 }

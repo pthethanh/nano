@@ -385,7 +385,7 @@ func (srv *Server) singleAddressHandler() http.Handler {
 }
 
 func (srv *Server) useSingleAddress() bool {
-	_, port1, err1 := net.SplitHostPort(srv.addr)
-	_, port2, err2 := net.SplitHostPort(srv.httpAddr)
-	return err1 == nil && err2 == nil && port1 == port2
+	h1, port1, err1 := net.SplitHostPort(srv.addr)
+	h2, port2, err2 := net.SplitHostPort(srv.httpAddr)
+	return err1 == nil && err2 == nil && port1 == port2 && h1 == h2
 }

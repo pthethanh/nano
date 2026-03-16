@@ -158,9 +158,15 @@ func (s *Server) listFunc(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) checkAndUpdate(name string, timeout time.Duration, check Checker) {
+	if check == nil {
+		s.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+		s.SetServingStatus(name, grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+		return
+	}
+
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	rs := make(chan error)
+	rs := make(chan error, 1)
 	go func() {
 		rs <- check.CheckHealth(timeoutCtx)
 	}()
@@ -179,7 +185,10 @@ func (s *Server) checkAndUpdate(name string, timeout time.Duration, check Checke
 			// failed to check, leave it as-is
 			return
 		}
-		for _, service := range list.Statuses {
+		for serviceName, service := range list.Statuses {
+			if serviceName == "" {
+				continue
+			}
 			if service.Status != grpc_health_v1.HealthCheckResponse_SERVING {
 				s.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 				return
