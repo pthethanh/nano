@@ -35,6 +35,7 @@ build_plugins:
 	$(MAKE) -C  plugins/broker/nats
 	$(MAKE) -C  plugins/broker/kafka
 	$(MAKE) -C  plugins/broker/watermill
+	$(MAKE) -C  plugins/cache/redis
 	$(MAKE) -C  examples/helloworld
 	$(MAKE) -C  examples/kafka
 

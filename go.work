@@ -12,4 +12,6 @@ use ./plugins/broker/kafka
 
 use ./plugins/broker/watermill
 
+use ./plugins/cache/redis
+
 use ./examples/helloworld
