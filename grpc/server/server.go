@@ -21,6 +21,7 @@ import (
 )
 
 type (
+	// Server wraps a gRPC server and optional HTTP gateway into a single service runtime.
 	Server struct {
 		// grpc
 		addr    string

@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// ContextServerStream wraps a grpc.ServerStream and overrides its context.
 type ContextServerStream struct {
 	grpc.ServerStream
 	ctx context.Context

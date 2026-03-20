@@ -1,4 +1,4 @@
-// Package status provide wrapper of package status, codes of grpc-go and some utilities for working with status, errors.
+// Package status wraps gRPC status and codes with convenience constructors, checks, and HTTP mapping helpers.
 package status
 
 import (

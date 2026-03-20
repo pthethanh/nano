@@ -15,6 +15,7 @@ import (
 )
 
 type (
+	// Reader loads configuration into a typed value from local files, env, and remote providers.
 	Reader[T any] struct {
 		opts *options
 		vp   *viper.Viper
@@ -26,7 +27,7 @@ type (
 	}
 )
 
-// Read loads configuration into T using provided options.
+// Read constructs a Reader with opts, loads configuration, and unmarshals it into T.
 func Read[T any](ctx context.Context, opts ...Option) (*T, error) {
 	r, err := NewReader[T](opts...)
 	if err != nil {
@@ -48,7 +49,7 @@ func MustRead[T any](ctx context.Context, opts ...Option) *T {
 	return t
 }
 
-// NewReader creates a new Reader for configuration loading.
+// NewReader creates a reusable Reader that can load configuration into T.
 func NewReader[T any](opts ...Option) (*Reader[T], error) {
 	r := &Reader[T]{
 		vp: viper.NewWithOptions(viper.ExperimentalBindStruct()),
@@ -108,7 +109,7 @@ func NewReader[T any](opts ...Option) (*Reader[T], error) {
 	return r, nil
 }
 
-// MustNewReader creates a new Reader and panics on error.
+// MustNewReader is like NewReader but panics on error.
 func MustNewReader[T any](opts ...Option) *Reader[T] {
 	r, err := NewReader[T](opts...)
 	if err != nil {

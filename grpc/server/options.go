@@ -94,39 +94,51 @@ var (
 	defaultGWPassthroughHeaders = []string{"X-Request-Id", "X-Correlation-ID", "Api-Key"}
 )
 
-// Logger sets a custom logger for server logging.
+// Logger replaces the server logger used for lifecycle and registration logs.
 func Logger(logger logger) grpc.ServerOption {
 	return loggerOpt{
 		logger: logger,
 	}
 }
 
-// OnShutdown sets a function to call before server shutdown.
+// OnShutdown registers a callback that runs before the server shuts down.
 func OnShutdown(f func()) grpc.ServerOption {
 	return onShutdownOpt{
 		f: f,
 	}
 }
 
-// GateWayOpts adds options for the gRPC gateway.
+// GateWayOpts appends raw grpc-gateway ServeMux options to the internal gateway mux.
+//
+// Use this when the built-in helpers in this package are not enough and you need
+// direct control over grpc-gateway behavior.
 func GateWayOpts(opts ...runtime.ServeMuxOption) grpc.ServerOption {
 	return gwOpt{
 		opts: opts,
 	}
 }
 
-// GatewayForwardHeaders forwards the provided HTTP headers to gRPC metadata.
+// GatewayForwardHeaders forwards the provided HTTP header names to gRPC metadata.
+//
+// The configured headers are forwarded in addition to the default passthrough
+// headers used by this package.
 func GatewayForwardHeaders(keys ...string) grpc.ServerOption {
 	return GateWayOpts(WithIncomingHeaderMatcher(keys))
 }
 
-// GatewayForwardHeadersByPrefix forwards HTTP headers with matching prefixes
-// to gRPC metadata in addition to the default passthrough headers.
+// GatewayForwardHeadersByPrefix forwards HTTP headers whose canonicalized names
+// start with one of the provided prefixes.
+//
+// This is useful for families of headers such as `X-Forwarded-` or custom
+// tracing and tenant headers.
 func GatewayForwardHeadersByPrefix(prefixes ...string) grpc.ServerOption {
 	return GateWayOpts(WithIncomingHeaderPrefixMatcher(prefixes))
 }
 
 // Timeout sets read and write timeouts for the internal HTTP server.
+//
+// These timeouts apply to HTTP and grpc-gateway traffic handled by the embedded
+// HTTP server. They do not change gRPC per-request deadlines.
 func Timeout(read, write time.Duration) grpc.ServerOption {
 	return timeoutOpt{
 		read:  read,
@@ -134,7 +146,10 @@ func Timeout(read, write time.Duration) grpc.ServerOption {
 	}
 }
 
-// TLS enables TLS using the provided cert and key files.
+// TLS enables TLS using the provided certificate and key files.
+//
+// It also updates the server's self-dial options so the internal gateway dials
+// the gRPC server using TLS instead of insecure credentials.
 func TLS(certFile, keyFile string) grpc.ServerOption {
 	creds, err := credentials.NewClientTLSFromFile(certFile, "")
 	if err != nil {
@@ -147,11 +162,11 @@ func TLS(certFile, keyFile string) grpc.ServerOption {
 	}
 }
 
-// Address sets the server address for both gRPC and HTTP on the same port.
-// Note: Serving both gRPC and HTTP on a single port has limitations—features like
-// service config, retry, and advanced gRPC connection handling may not be fully supported.
-// To avoid these limitations, use SeparateAddresses to expose gRPC and HTTP on
-// different ports.
+// Address serves both gRPC and HTTP traffic on the same address.
+//
+// This is the simplest option and works well for local development and small
+// deployments. If you need separate network policies, independent listeners, or
+// fewer grpc-gateway limitations, use SeparateAddresses instead.
 func Address(addr string) grpc.ServerOption {
 	return addrOpt{
 		httpAddr: addr,
@@ -159,8 +174,10 @@ func Address(addr string) grpc.ServerOption {
 	}
 }
 
-// SeparateAddresses sets separate addresses for gRPC and HTTP servers
-// in case you want to expose them on different ports.
+// SeparateAddresses serves gRPC and HTTP traffic on different addresses.
+//
+// Prefer this in production when you want independent ports for direct gRPC
+// traffic and the HTTP gateway.
 func SeparateAddresses(grpcAddr, httpAddr string) grpc.ServerOption {
 	return addrOpt{
 		httpAddr: httpAddr,
@@ -168,14 +185,19 @@ func SeparateAddresses(grpcAddr, httpAddr string) grpc.ServerOption {
 	}
 }
 
-// APIPrefix sets the API prefix for the gRPC gateway.
+// APIPrefix sets the URL prefix used when mounting grpc-gateway handlers.
+//
+// For example, passing `/api` mounts generated HTTP handlers under `/api`.
 func APIPrefix(prefix string) grpc.ServerOption {
 	return apiPrefixOpt{
 		prefix: prefix,
 	}
 }
 
-// Handler registers an additional HTTP handler with the given prefix.
+// Handler registers an additional HTTP handler under pathPrefix.
+//
+// Use this for health checks, metrics, or custom HTTP endpoints that should be
+// served alongside grpc-gateway routes.
 func Handler(pathPrefix string, h http.Handler) grpc.ServerOption {
 	return handlerOpt{
 		prefix: pathPrefix,
@@ -183,21 +205,26 @@ func Handler(pathPrefix string, h http.Handler) grpc.ServerOption {
 	}
 }
 
-// NotFoundHandler sets a custom handler for 404 responses.
+// NotFoundHandler sets the handler used for unmatched HTTP routes.
+//
+// The handler is also used by grpc-gateway routing errors that map to HTTP 404.
 func NotFoundHandler(h http.Handler) grpc.ServerOption {
 	return notFoundHandlerOpt{
 		h: h,
 	}
 }
 
-// Middlewares applies middleware to all HTTP requests.
+// Middlewares applies HTTP middleware to all requests handled by the embedded
+// HTTP server, including grpc-gateway routes and custom handlers.
 func Middlewares(mdws ...middleware) grpc.ServerOption {
 	return mdwOpt{
 		mdws: mdws,
 	}
 }
 
-// Listener sets a custom net.Listener for the server.
+// Listener uses the same net.Listener for both gRPC and HTTP traffic.
+//
+// This is the listener equivalent of Address.
 func Listener(lis net.Listener) grpc.ServerOption {
 	return lisOpt{
 		lis:     lis,
@@ -205,7 +232,9 @@ func Listener(lis net.Listener) grpc.ServerOption {
 	}
 }
 
-// SeparateListeners sets separate listeners for gRPC and HTTP servers.
+// SeparateListeners uses different listeners for gRPC and HTTP traffic.
+//
+// This is the listener equivalent of SeparateAddresses.
 func SeparateListeners(grpcLis, httpLis net.Listener) grpc.ServerOption {
 	return lisOpt{
 		lis:     grpcLis,
@@ -213,14 +242,21 @@ func SeparateListeners(grpcLis, httpLis net.Listener) grpc.ServerOption {
 	}
 }
 
-// ShutdownTimeout sets the shutdown timeout duration.
+// ShutdownTimeout sets how long shutdown waits for in-flight work to finish.
+//
+// A negative duration keeps the current default behavior. A zero duration asks
+// the server to shut down immediately without waiting.
 func ShutdownTimeout(d time.Duration) grpc.ServerOption {
 	return shutdownTimeout{
 		timeout: d,
 	}
 }
 
-// WithIncomingHeaderMatcher customizes which headers are forwarded from HTTP to gRPC.
+// WithIncomingHeaderMatcher returns a grpc-gateway option that forwards the
+// provided HTTP header names to gRPC metadata.
+//
+// Header names are canonicalized before matching. The default passthrough
+// headers for this package are always included.
 func WithIncomingHeaderMatcher(keys []string) runtime.ServeMuxOption {
 	merged := append(keys, defaultGWPassthroughHeaders...)
 	slices.Sort(merged)
@@ -236,8 +272,10 @@ func WithIncomingHeaderMatcher(keys []string) runtime.ServeMuxOption {
 	})
 }
 
-// WithIncomingHeaderPrefixMatcher customizes which headers are forwarded from
-// HTTP to gRPC by matching canonicalized header prefixes.
+// WithIncomingHeaderPrefixMatcher returns a grpc-gateway option that forwards
+// HTTP headers whose canonicalized names match one of the provided prefixes.
+//
+// Default passthrough headers are still forwarded even when no prefix matches.
 func WithIncomingHeaderPrefixMatcher(prefixes []string) runtime.ServeMuxOption {
 	canonicalPrefixes := make([]string, 0, len(prefixes))
 	for _, prefix := range prefixes {

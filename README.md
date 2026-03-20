@@ -1,53 +1,160 @@
 # nano
 
-A clean, simple, and easy-to-use Go toolkit for building microservices.
+`nano` is a modular Go toolkit for building microservices.
+
+It is designed to work well both for human developers and for code agents consuming it as a dependency in another project.
 
 ## Design Principles
 
 1. Simple and easy to use.
-2. Designed to work seamlessly with Go and native gRPC libraries whenever possible.
+2. Prefer native Go and gRPC patterns over heavy abstractions.
 3. Ready to use out of the box, with flexible configuration options.
-4. No cross-package dependencies — each package can be used independently without relying on others in the repository.
+4. No cross-package dependencies. Each top-level package is intended to be used independently.
 
-## Getting Started
+## Using `nano` In Another Project
 
-### 1. Define your proto
+If you are using `nano` from another repository, import only the packages you need.
 
-```proto
-syntax = "proto3";
+Common starting points:
+- `github.com/pthethanh/nano/grpc/server`: gRPC server setup with optional HTTP gateway support
+- `github.com/pthethanh/nano/grpc/client`: gRPC client helpers and metadata forwarding helpers
+- `github.com/pthethanh/nano/config`: config loading from file, env, and remote providers
+- `github.com/pthethanh/nano/log`: context-aware structured logging built on `log/slog`
+- `github.com/pthethanh/nano/status`: gRPC-compatible status helpers and HTTP mapping utilities
+- `github.com/pthethanh/nano/validator`: request and struct validation helpers
+- `github.com/pthethanh/nano/broker`: async message broker interface and implementations
+- `github.com/pthethanh/nano/cache`: cache interface and implementations
+- `github.com/pthethanh/nano/metric`: metric interfaces and in-memory reporter
 
-package helloworld;
-option go_package = "github.com/pthethanh/nano/examples/helloworld/api;api";
+Recommended adoption path:
+1. Start with `grpc/server` and `grpc/client` if you are building a gRPC service.
+2. Add `config` for configuration loading.
+3. Add `log` for context-aware logging.
+4. Use `status` for consistent service errors.
+5. Add `validator`, `broker`, `cache`, or `metric` only where needed.
 
-import "google/api/annotations.proto";
+## Minimal gRPC Server
 
-// The hello service definition.
-service Hello {
-  // Sends a hello
-  rpc SayHello (HelloRequest) returns (HelloResponse) {
-    option (google.api.http) = {
-      post: "/api/v1/hello"
-      body: "*"
-    };
-  }
+If you already have generated gRPC service stubs, `grpc/server` is the main entry point.
+
+```go
+package main
+
+import (
+	"context"
+
+	"github.com/pthethanh/nano/grpc/server"
+	"github.com/pthethanh/nano/log"
+)
+
+type HelloServer struct {
+	api.UnimplementedHelloServer
 }
 
-message HelloRequest {
-  string name = 1;
+func (*HelloServer) SayHello(ctx context.Context, req *api.HelloRequest) (*api.HelloResponse, error) {
+	log.InfoContext(ctx, "saying hello", "name", req.Name)
+	return &api.HelloResponse{Message: "Hello " + req.Name}, nil
 }
 
-message HelloResponse {
-  string message = 1;
+func main() {
+	srv := server.New(server.Address(":8081"))
+	if err := srv.ListenAndServe(context.Background(), new(HelloServer)); err != nil {
+		panic(err)
+	}
 }
 ```
 
-### 2. Install the nano code generator
+## Minimal gRPC Client
+
+```go
+package main
+
+import (
+	"context"
+
+	nanoclient "github.com/pthethanh/nano/grpc/client"
+)
+
+func main() {
+	conn := nanoclient.MustNew(context.Background(), ":8081")
+	defer conn.Close()
+
+	client := api.NewHelloClient(conn)
+	res, err := client.SayHello(context.Background(), &api.HelloRequest{Name: "Jack"})
+	if err != nil {
+		panic(err)
+	}
+	_ = res
+}
+```
+
+## Config Example
+
+```go
+package main
+
+import (
+	"context"
+
+	"github.com/pthethanh/nano/config"
+)
+
+type Config struct {
+	Server struct {
+		Address string `mapstructure:"address"`
+	} `mapstructure:"server"`
+}
+
+func main() {
+	cfg, err := config.Read[Config](
+		context.Background(),
+		config.WithFile("config.local.yaml"),
+		config.WithEnv("APP", ".", "_"),
+	)
+	if err != nil {
+		panic(err)
+	}
+	_ = cfg
+}
+```
+
+## Logging Example
+
+```go
+package main
+
+import (
+	"context"
+
+	"github.com/pthethanh/nano/log"
+)
+
+func main() {
+	ctx := log.AppendToContext(context.Background(), "request_id", "req-123")
+	log.InfoContext(ctx, "request started")
+}
+```
+
+## Status Example
+
+```go
+func FindUser(id string) error {
+	if id == "" {
+		return status.InvalidArgument("id is required")
+	}
+	return status.NotFound("user %q not found", id)
+}
+```
+
+## Code Generation
+
+If you want `nano` to generate service scaffolding, install the generator:
 
 ```shell
 go install github.com/pthethanh/nano/cmd/protoc-gen-nano
 ```
 
-### 3. Generate code
+Example `protoc` command:
 
 ```shell
 protoc -I /usr/local/include -I ~/go/src/github.com/googleapis/googleapis -I ./proto \
@@ -61,58 +168,39 @@ protoc -I /usr/local/include -I ~/go/src/github.com/googleapis/googleapis -I ./p
  ./proto/helloworld.proto
 ```
 
-### 4. Implement the service and start the server
+See the full generated example in [`examples/helloworld`](./examples/helloworld).
 
-```go
-type HelloServer struct {
-	api.UnimplementedHelloServer
-}
+## Examples
 
-func (*HelloServer) SayHello(ctx context.Context, req *api.HelloRequest) (*api.HelloResponse, error) {
-	log.InfoContext(ctx, "saying hello to", "name", req.Name)
-	return &api.HelloResponse{
-		Message: "Hello " + req.Name,
-	}, nil
-}
+- [`examples/helloworld`](./examples/helloworld): generated gRPC service, client, and HTTP gateway
+- [`examples/kafka`](./examples/kafka): broker integration example
 
-func main() {
-	srv := server.New(server.Address(":8081"))
-	if err := srv.ListenAndServe(context.TODO(), new(HelloServer)); err != nil {
-		panic(err)
-	}
-}
-```
+## Validation
 
-### 5. Create a client and call the server
-
-```go
-client := api.MustNewHelloClient(context.TODO(), ":8081")
-res, err := client.SayHello(context.TODO(), &api.HelloRequest{
-    Name: "Jack",
-})
-```
-
-### 6. Call via REST API
+Useful repository commands:
 
 ```shell
-curl -X POST http://localhost:8081/api/v1/hello -d '{"name": "Jack"}'
+go test ./...
+make test
+make fmt
+make vet
 ```
 
----
-
-See full code at [examples/helloworld](https://github.com/pthethanh/nano/tree/main/examples/helloworld)
+The root `Makefile` also builds plugin and example modules.
 
 ## Features
 
-- **gRPC**: Production-ready, user-friendly APIs for building gRPC servers and clients. Includes built-in support for interceptors and HTTP gateway integration.
-- **Broker**: Asynchronous messaging interface with pluggable backends such as in-memory, Kafka, and NATS.
-- **Cache**: Generic caching interface supporting multiple backends like in-memory and Redis, with plugin extensibility.
-- **Config**: Versatile configuration loader that supports local files, environment variables, and remote providers.
-- **Log**: Structured, context-aware logging with support for various backends.
-- **Metrics**: Unified interface for collecting metrics—including counters, gauges, histograms, and summaries—compatible with Prometheus and other reporters.
-- **Status**: Comprehensive error and status handling aligned with gRPC codes and HTTP status mappings.
-- **Plugins**: Extend broker and cache functionality effortlessly using custom plugins.
-- **protoc-gen-nano**: Built-in code generator for scaffolding gRPC services, HTTP gateways, and nano service templates.
-- **Interceptors**: I suggest using the interceptors provided by [go-grpc-middleware](https://github.com/grpc-ecosystem/go-grpc-middleware)
+- **gRPC**: gRPC server and client helpers with HTTP gateway support
+- **Broker**: asynchronous messaging interface with pluggable backends
+- **Cache**: generic cache interface with in-memory and Redis implementations
+- **Config**: configuration loading from files, env, and remote providers
+- **Log**: structured, context-aware logging with `slog`
+- **Metrics**: counters, gauges, histograms, and summaries
+- **Status**: gRPC-compatible status helpers and HTTP mapping utilities
+- **Plugins**: optional plugin modules for broker and cache backends
+- **protoc-gen-nano**: code generator for service scaffolding and gateway output
 
-All components are modular and can be used independently or together—making **nano** ideal for building scalable, maintainable microservices.
+If you are driving code generation with an agent, prefer these inputs:
+- one or two working examples from `examples/`
+- the package docs on `grpc/server`, `grpc/client`, `config`, `log`, and `status`
+- the repository rules in [`AGENTS.md`](./AGENTS.md)

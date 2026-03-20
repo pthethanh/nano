@@ -37,7 +37,7 @@ func Default(tags ...string) *Validator {
 	return v
 }
 
-// Validate a struct exposed fields base on the definition of validate tag.
+// Validate validates v using the default validator and its configured tags.
 func Validate(ctx context.Context, v any) error {
 	return Default().Validate(ctx, v)
 }
@@ -57,7 +57,7 @@ func Var(ctx context.Context, field any, tag string) error {
 	return Default().Var(ctx, field, tag)
 }
 
-// Register adds a validation with the given tag
+// Register adds a validation function to the default validator for the given tag.
 func Register(tag string, fn validate.FuncCtx, callValidationEvenIfNull bool) error {
 	return Default().Register(tag, fn, callValidationEvenIfNull)
 }

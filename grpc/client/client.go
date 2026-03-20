@@ -9,8 +9,11 @@ import (
 	_ "google.golang.org/grpc/health" // enable health check
 )
 
-// New creates a client connection to the given target with health check enabled
-// and some others default configurations.
+// New creates a gRPC client connection to address.
+//
+// By default it uses insecure transport credentials unless explicit dial options
+// override them. Import health checking is enabled so generated clients can use
+// gRPC health checks without extra setup.
 func New(_ context.Context, address string, options ...grpc.DialOption) (*grpc.ClientConn, error) {
 	opts := append([]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}, options...)
 	conn, err := grpc.NewClient(address, opts...)
@@ -20,7 +23,7 @@ func New(_ context.Context, address string, options ...grpc.DialOption) (*grpc.C
 	return conn, nil
 }
 
-// MustNew same as New but panic if error.
+// MustNew is like New but panics if the connection cannot be created.
 func MustNew(ctx context.Context, address string, options ...grpc.DialOption) *grpc.ClientConn {
 	conn, err := New(ctx, address, options...)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 )
 
 type (
+	// Logger wraps slog.Logger and merges logger and attributes stored in context.
 	Logger struct {
 		*slog.Logger
 	}
