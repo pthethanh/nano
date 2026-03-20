@@ -1,4 +1,4 @@
-package server
+package server_test
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/pthethanh/nano/grpc/server"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -27,20 +28,65 @@ func TestIncomingMetadataReturnsCopy(t *testing.T) {
 		"authorization", "Bearer token",
 	))
 
-	md := IncomingMetadata(ctx)
+	md := server.IncomingMetadata(ctx)
 	if got, want := md.Get("x-request-id"), []string{"req-1"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("got x-request-id=%v, want %v", got, want)
 	}
 
 	md.Set("x-request-id", "req-2")
-	if got, want := IncomingMetadataValue(ctx, "x-request-id"), []string{"req-1"}; !reflect.DeepEqual(got, want) {
+	if got, want := server.IncomingMetadataValues(ctx, "x-request-id"), []string{"req-1"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("got x-request-id=%v, want %v", got, want)
 	}
 }
 
-func TestIncomingMetadataValueReturnsNilWithoutMetadata(t *testing.T) {
-	if got := IncomingMetadataValue(context.Background(), "x-request-id"); got != nil {
+func TestIncomingMetadataValuesReturnsNilWithoutMetadata(t *testing.T) {
+	if got := server.IncomingMetadataValues(context.Background(), "x-request-id"); got != nil {
 		t.Fatalf("got %v, want nil", got)
+	}
+}
+
+func TestIncomingMetadataReturnsNilWithoutMetadata(t *testing.T) {
+	if got := server.IncomingMetadata(context.Background()); got != nil {
+		t.Fatalf("got %v, want nil", got)
+	}
+}
+
+func TestIncomingMetadataValueReturnsFirstValue(t *testing.T) {
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+		"x-request-id", "req-1",
+		"x-request-id", "req-2",
+	))
+	if got, want := server.IncomingMetadataValue(ctx, "x-request-id"), "req-1"; got != want {
+		t.Fatalf("got x-request-id=%q, want %q", got, want)
+	}
+}
+
+func TestIncomingMetadataValueReturnsEmptyWithoutMetadata(t *testing.T) {
+	if got := server.IncomingMetadataValue(context.Background(), "x-request-id"); got != "" {
+		t.Fatalf("got %q, want empty string", got)
+	}
+}
+
+func TestRequireIncomingMetadata(t *testing.T) {
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+		"x-request-id", "req-1",
+		"authorization", "Bearer token",
+	))
+	if err := server.RequireIncomingMetadata(ctx, "x-request-id", "authorization"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRequireIncomingMetadataReturnsMissingKey(t *testing.T) {
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+		"x-request-id", "req-1",
+	))
+	err := server.RequireIncomingMetadata(ctx, "authorization")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if got, want := err.Error(), "missing incoming metadata: authorization"; got != want {
+		t.Fatalf("got err=%q, want %q", got, want)
 	}
 }
 
@@ -48,8 +94,8 @@ func TestNewContextServerStreamUpdatesExistingWrapperContext(t *testing.T) {
 	ctx1 := context.WithValue(context.Background(), contextKey("step"), "one")
 	ctx2 := context.WithValue(context.Background(), contextKey("step"), "two")
 
-	wrapped := NewContextServerStream(ctx1, &testServerStream{ctx: context.Background()})
-	updated := NewContextServerStream(ctx2, wrapped)
+	wrapped := server.NewContextServerStream(ctx1, &testServerStream{ctx: context.Background()})
+	updated := server.NewContextServerStream(ctx2, wrapped)
 
 	if wrapped != updated {
 		t.Fatal("expected existing wrapped stream to be reused")
@@ -60,7 +106,7 @@ func TestNewContextServerStreamUpdatesExistingWrapperContext(t *testing.T) {
 }
 
 func TestContextUnaryInterceptorPassesModifiedContext(t *testing.T) {
-	interceptor := ContextUnaryInterceptor(func(ctx context.Context) (context.Context, error) {
+	interceptor := server.ContextUnaryInterceptor(func(ctx context.Context) (context.Context, error) {
 		return context.WithValue(ctx, contextKey("request-id"), "req-1"), nil
 	})
 
@@ -76,7 +122,7 @@ func TestContextUnaryInterceptorPassesModifiedContext(t *testing.T) {
 }
 
 func TestContextStreamInterceptorPassesModifiedContext(t *testing.T) {
-	interceptor := ContextStreamInterceptor(func(ctx context.Context) (context.Context, error) {
+	interceptor := server.ContextStreamInterceptor(func(ctx context.Context) (context.Context, error) {
 		return context.WithValue(ctx, contextKey("request-id"), "req-1"), nil
 	})
 
@@ -96,7 +142,7 @@ func TestDeferContextUnaryInterceptorRunsAfterHandler(t *testing.T) {
 		called     bool
 		handlerRan bool
 	)
-	interceptor := DeferContextUnaryInterceptor(func(ctx context.Context) {
+	interceptor := server.DeferContextUnaryInterceptor(func(ctx context.Context) {
 		called = true
 		if !handlerRan {
 			t.Fatal("expected handler to run before deferred callback")
@@ -120,7 +166,7 @@ func TestDeferContextStreamInterceptorRunsAfterHandler(t *testing.T) {
 		called     bool
 		handlerRan bool
 	)
-	interceptor := DeferContextStreamInterceptor(func(ctx context.Context) {
+	interceptor := server.DeferContextStreamInterceptor(func(ctx context.Context) {
 		called = true
 		if !handlerRan {
 			t.Fatal("expected handler to run before deferred callback")
@@ -141,7 +187,7 @@ func TestDeferContextStreamInterceptorRunsAfterHandler(t *testing.T) {
 
 func TestContextUnaryInterceptorPreservesWrappedErrors(t *testing.T) {
 	want := errors.New("boom")
-	interceptor := ContextUnaryInterceptor(func(ctx context.Context) (context.Context, error) {
+	interceptor := server.ContextUnaryInterceptor(func(ctx context.Context) (context.Context, error) {
 		return nil, want
 	})
 
@@ -155,7 +201,7 @@ func TestContextUnaryInterceptorPreservesWrappedErrors(t *testing.T) {
 
 func TestContextStreamInterceptorPreservesWrappedErrors(t *testing.T) {
 	want := errors.New("boom")
-	interceptor := ContextStreamInterceptor(func(ctx context.Context) (context.Context, error) {
+	interceptor := server.ContextStreamInterceptor(func(ctx context.Context) (context.Context, error) {
 		return nil, want
 	})
 

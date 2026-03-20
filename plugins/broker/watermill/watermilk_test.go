@@ -1,4 +1,4 @@
-package watermill
+package watermill_test
 
 import (
 	"context"
@@ -8,10 +8,11 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
-	"github.com/ThreeDotsLabs/watermill"
+	wm "github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/pthethanh/nano/broker"
 	"github.com/pthethanh/nano/log"
+	"github.com/pthethanh/nano/plugins/broker/watermill"
 )
 
 type testMsg struct {
@@ -29,7 +30,7 @@ func TestWatermillBrokerWithKafka(t *testing.T) {
 		kafka.PublisherConfig{
 			Brokers:   brokers,
 			Marshaler: kafka.DefaultMarshaler{},
-		}, watermill.NewSlogLogger(log.Default().Logger),
+		}, wm.NewSlogLogger(log.Default().Logger),
 	)
 	if err != nil {
 		t.Fatalf("failed to create publisher: %v", err)
@@ -45,13 +46,13 @@ func TestWatermillBrokerWithKafka(t *testing.T) {
 				NumPartitions:     1,
 				ReplicationFactor: 1,
 			},
-		}, watermill.NewSlogLogger(log.Default().Logger))
+		}, wm.NewSlogLogger(log.Default().Logger))
 	if err != nil {
 		t.Fatalf("failed to create subscriber: %v", err)
 	}
 	defer sub.Close()
 
-	b := New[testMsg](pub, sub)
+	b := watermill.New[testMsg](pub, sub)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -1,4 +1,4 @@
-package client
+package client_test
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pthethanh/nano/grpc/client"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -20,6 +21,30 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/test/bufconn"
 )
+
+func TestMustNewReturnsConnection(t *testing.T) {
+	lis := bufconn.Listen(1024 * 1024)
+	srv := grpc.NewServer()
+	healthpb.RegisterHealthServer(srv, health.NewServer())
+	go func() {
+		_ = srv.Serve(lis)
+	}()
+	t.Cleanup(func() {
+		srv.Stop()
+		_ = lis.Close()
+	})
+
+	conn := client.MustNew(t.Context(), "passthrough:///bufnet",
+		grpc.WithContextDialer(bufDialer(lis)),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	client := healthpb.NewHealthClient(conn)
+	if _, err := client.Check(t.Context(), &healthpb.HealthCheckRequest{}); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestNewWithExplicitInsecureTransportCredentials(t *testing.T) {
 	lis := bufconn.Listen(1024 * 1024)
@@ -33,7 +58,7 @@ func TestNewWithExplicitInsecureTransportCredentials(t *testing.T) {
 		_ = lis.Close()
 	})
 
-	conn, err := New(t.Context(), "passthrough:///bufnet",
+	conn, err := client.New(t.Context(), "passthrough:///bufnet",
 		grpc.WithContextDialer(bufDialer(lis)),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
@@ -61,7 +86,7 @@ func TestNewWithExplicitTLSCredentials(t *testing.T) {
 		_ = lis.Close()
 	})
 
-	conn, err := New(t.Context(), "passthrough:///bufnet",
+	conn, err := client.New(t.Context(), "passthrough:///bufnet",
 		grpc.WithContextDialer(bufDialer(lis)),
 		grpc.WithTransportCredentials(credentials.NewTLS(clientTLS)),
 	)
@@ -77,7 +102,7 @@ func TestNewWithExplicitTLSCredentials(t *testing.T) {
 }
 
 func TestNewTokenCredentials(t *testing.T) {
-	cred := NewTokenCredentials("Bearer abc")
+	cred := client.NewTokenCredentials("Bearer abc")
 	md, err := cred.GetRequestMetadata(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +114,7 @@ func TestNewTokenCredentials(t *testing.T) {
 		t.Fatal("got RequireTransportSecurity=true, want false")
 	}
 
-	secureCred := NewTokenCredentials("Bearer abc", true)
+	secureCred := client.NewTokenCredentials("Bearer abc", true)
 	if !secureCred.RequireTransportSecurity() {
 		t.Fatal("got RequireTransportSecurity=false, want true")
 	}

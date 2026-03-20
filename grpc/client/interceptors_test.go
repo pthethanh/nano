@@ -1,4 +1,4 @@
-package client
+package client_test
 
 import (
 	"context"
@@ -6,17 +6,18 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/pthethanh/nano/grpc/client"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
-func TestSetMetadataSetsAndOverridesOutgoingValues(t *testing.T) {
+func TestOutgoingMetadataSetsAndOverridesOutgoingValues(t *testing.T) {
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs(
 		"x-request-id", "req-old",
 		"x-tenant-id", "tenant-1",
 	))
 
-	ctx = SetMetadata(ctx, "X-Request-Id", "req-new", "authorization", "Bearer token")
+	ctx = client.OutgoingMetadata(ctx, "X-Request-Id", "req-new", "authorization", "Bearer token")
 
 	outgoing, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
@@ -33,12 +34,19 @@ func TestSetMetadataSetsAndOverridesOutgoingValues(t *testing.T) {
 	}
 }
 
-func TestAppendMetadataAppendsOutgoingValues(t *testing.T) {
+func TestOutgoingMetadataReturnsSameContextWithoutPairs(t *testing.T) {
+	ctx := context.Background()
+	if got := client.OutgoingMetadata(ctx); got != ctx {
+		t.Fatal("expected original context")
+	}
+}
+
+func TestAppendOutgoingMetadataAppendsOutgoingValues(t *testing.T) {
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs(
 		"x-request-id", "req-1",
 	))
 
-	ctx = AppendMetadata(ctx, "X-Request-Id", "req-2", "authorization", "Bearer token")
+	ctx = client.AppendOutgoingMetadata(ctx, "X-Request-Id", "req-2", "authorization", "Bearer token")
 
 	outgoing, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
@@ -52,13 +60,20 @@ func TestAppendMetadataAppendsOutgoingValues(t *testing.T) {
 	}
 }
 
-func TestForwardMetadataCopiesAllWhenNoKeysProvided(t *testing.T) {
+func TestAppendOutgoingMetadataReturnsSameContextWithoutPairs(t *testing.T) {
+	ctx := context.Background()
+	if got := client.AppendOutgoingMetadata(ctx); got != ctx {
+		t.Fatal("expected original context")
+	}
+}
+
+func TestForwardIncomingMetadataCopiesAllWhenNoKeysProvided(t *testing.T) {
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
 		"x-request-id", "req-1",
 		"authorization", "Bearer token",
 	))
 
-	ctx = ForwardMetadata(ctx)
+	ctx = client.ForwardIncomingMetadata(ctx)
 
 	outgoing, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
@@ -72,13 +87,22 @@ func TestForwardMetadataCopiesAllWhenNoKeysProvided(t *testing.T) {
 	}
 }
 
-func TestForwardMetadataCopiesOnlySelectedKeys(t *testing.T) {
+func TestForwardIncomingMetadataReturnsSameContextWithoutMatchingKeys(t *testing.T) {
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+		"x-request-id", "req-1",
+	))
+	if got := client.ForwardIncomingMetadata(ctx, "authorization"); got != ctx {
+		t.Fatal("expected original context")
+	}
+}
+
+func TestForwardIncomingMetadataCopiesOnlySelectedKeys(t *testing.T) {
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
 		"x-request-id", "req-1",
 		"authorization", "Bearer token",
 	))
 
-	ctx = ForwardMetadata(ctx, "X-Request-Id")
+	ctx = client.ForwardIncomingMetadata(ctx, "X-Request-Id")
 
 	outgoing, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
@@ -92,7 +116,7 @@ func TestForwardMetadataCopiesOnlySelectedKeys(t *testing.T) {
 	}
 }
 
-func TestForwardMetadataOverridesMatchingOutgoingKeys(t *testing.T) {
+func TestForwardIncomingMetadataOverridesMatchingOutgoingKeys(t *testing.T) {
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
 		"x-request-id", "req-incoming",
 		"authorization", "Bearer incoming",
@@ -102,7 +126,7 @@ func TestForwardMetadataOverridesMatchingOutgoingKeys(t *testing.T) {
 		"x-tenant-id", "tenant-1",
 	))
 
-	ctx = ForwardMetadata(ctx, "x-request-id", "authorization")
+	ctx = client.ForwardIncomingMetadata(ctx, "x-request-id", "authorization")
 
 	outgoing, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
@@ -119,15 +143,15 @@ func TestForwardMetadataOverridesMatchingOutgoingKeys(t *testing.T) {
 	}
 }
 
-func TestForwardMetadataReturnsSameContextWithoutIncomingMetadata(t *testing.T) {
+func TestForwardIncomingMetadataReturnsSameContextWithoutIncomingMetadata(t *testing.T) {
 	ctx := context.Background()
-	if got := ForwardMetadata(ctx, "x-request-id"); got != ctx {
+	if got := client.ForwardIncomingMetadata(ctx, "x-request-id"); got != ctx {
 		t.Fatal("expected original context")
 	}
 }
 
 func TestForwardMetadataUnaryInterceptor(t *testing.T) {
-	interceptor := ForwardMetadataUnaryInterceptor("x-request-id")
+	interceptor := client.ForwardMetadataUnaryInterceptor("x-request-id")
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
 		"x-request-id", "req-1",
 		"authorization", "Bearer token",
@@ -152,7 +176,7 @@ func TestForwardMetadataUnaryInterceptor(t *testing.T) {
 }
 
 func TestForwardMetadataStreamInterceptor(t *testing.T) {
-	interceptor := ForwardMetadataStreamInterceptor("authorization")
+	interceptor := client.ForwardMetadataStreamInterceptor("authorization")
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
 		"x-request-id", "req-1",
 		"authorization", "Bearer token",
@@ -181,12 +205,94 @@ func TestForwardMetadataStreamInterceptor(t *testing.T) {
 
 func TestForwardMetadataUnaryInterceptorPreservesWrappedErrors(t *testing.T) {
 	want := errors.New("boom")
-	interceptor := ForwardMetadataUnaryInterceptor("x-request-id")
+	interceptor := client.ForwardMetadataUnaryInterceptor("x-request-id")
 
 	err := interceptor(context.Background(), "/svc/method", nil, nil, nil, func(callCtx context.Context, method string, req, reply any, cc *grpc.ClientConn, opts ...grpc.CallOption) error {
 		return want
 	})
 	if !errors.Is(err, want) {
 		t.Fatalf("got err=%v, want %v", err, want)
+	}
+}
+
+func TestContextUnaryInterceptorPreservesWrappedErrors(t *testing.T) {
+	want := errors.New("boom")
+	interceptor := client.ContextUnaryInterceptor(func(ctx context.Context) (context.Context, error) {
+		return nil, want
+	})
+
+	err := interceptor(context.Background(), "/svc/method", nil, nil, nil, func(callCtx context.Context, method string, req, reply any, cc *grpc.ClientConn, opts ...grpc.CallOption) error {
+		return nil
+	})
+	if !errors.Is(err, want) {
+		t.Fatalf("got err=%v, want %v", err, want)
+	}
+}
+
+func TestContextStreamInterceptorPreservesWrappedErrors(t *testing.T) {
+	want := errors.New("boom")
+	interceptor := client.ContextStreamInterceptor(func(ctx context.Context) (context.Context, error) {
+		return nil, want
+	})
+
+	stream, err := interceptor(context.Background(), &grpc.StreamDesc{}, nil, "/svc/method", func(callCtx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		return nil, nil
+	})
+	if !errors.Is(err, want) {
+		t.Fatalf("got err=%v, want %v", err, want)
+	}
+	if stream != nil {
+		t.Fatal("expected nil client stream")
+	}
+}
+
+func TestDeferContextUnaryInterceptorRunsAfterInvoker(t *testing.T) {
+	var (
+		called     bool
+		invokerRan bool
+	)
+	interceptor := client.DeferContextUnaryInterceptor(func(ctx context.Context) {
+		called = true
+		if !invokerRan {
+			t.Fatal("expected invoker to run before deferred callback")
+		}
+	})
+
+	err := interceptor(context.Background(), "/svc/method", nil, nil, nil, func(callCtx context.Context, method string, req, reply any, cc *grpc.ClientConn, opts ...grpc.CallOption) error {
+		invokerRan = true
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("expected deferred callback to run")
+	}
+}
+
+func TestDeferContextStreamInterceptorRunsAfterStreamer(t *testing.T) {
+	var (
+		called      bool
+		streamerRan bool
+	)
+	interceptor := client.DeferContextStreamInterceptor(func(ctx context.Context) {
+		called = true
+		if !streamerRan {
+			t.Fatal("expected streamer to run before deferred callback")
+		}
+	})
+
+	stream, err := interceptor(context.Background(), &grpc.StreamDesc{}, nil, "/svc/method", func(callCtx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		streamerRan = true
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stream != nil {
+		t.Fatal("expected nil client stream")
+	}
+	if !called {
+		t.Fatal("expected deferred callback to run")
 	}
 }

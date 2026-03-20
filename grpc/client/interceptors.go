@@ -53,7 +53,7 @@ func DeferContextStreamInterceptor(f func(context.Context)) grpc.StreamClientInt
 // outgoing context before invoking a unary client call.
 func ForwardMetadataUnaryInterceptor(keys ...string) grpc.UnaryClientInterceptor {
 	return ContextUnaryInterceptor(func(ctx context.Context) (context.Context, error) {
-		return ForwardMetadata(ctx, keys...), nil
+		return ForwardIncomingMetadata(ctx, keys...), nil
 	})
 }
 
@@ -61,6 +61,6 @@ func ForwardMetadataUnaryInterceptor(keys ...string) grpc.UnaryClientInterceptor
 // outgoing context before creating a client stream.
 func ForwardMetadataStreamInterceptor(keys ...string) grpc.StreamClientInterceptor {
 	return ContextStreamInterceptor(func(ctx context.Context) (context.Context, error) {
-		return ForwardMetadata(ctx, keys...), nil
+		return ForwardIncomingMetadata(ctx, keys...), nil
 	})
 }

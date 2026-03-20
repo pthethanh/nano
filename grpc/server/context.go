@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -40,11 +41,32 @@ func IncomingMetadata(ctx context.Context) metadata.MD {
 	return md.Copy()
 }
 
-// IncomingMetadataValue returns the values for an incoming gRPC metadata key.
-func IncomingMetadataValue(ctx context.Context, key string) []string {
+// IncomingMetadataValues returns the values for an incoming gRPC metadata key.
+func IncomingMetadataValues(ctx context.Context, key string) []string {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok || len(md) == 0 {
 		return nil
 	}
 	return append([]string(nil), md.Get(key)...)
+}
+
+// IncomingMetadataValue returns the first value for an incoming gRPC metadata key.
+// It returns an empty string when the key is not present.
+func IncomingMetadataValue(ctx context.Context, key string) string {
+	values := IncomingMetadataValues(ctx, key)
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
+}
+
+// RequireIncomingMetadata checks that the provided incoming metadata keys exist.
+// It returns an error naming the first missing key.
+func RequireIncomingMetadata(ctx context.Context, keys ...string) error {
+	for _, key := range keys {
+		if IncomingMetadataValue(ctx, key) == "" {
+			return fmt.Errorf("missing incoming metadata: %s", key)
+		}
+	}
+	return nil
 }

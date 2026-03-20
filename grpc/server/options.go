@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -114,6 +115,17 @@ func GateWayOpts(opts ...runtime.ServeMuxOption) grpc.ServerOption {
 	}
 }
 
+// GatewayForwardHeaders forwards the provided HTTP headers to gRPC metadata.
+func GatewayForwardHeaders(keys ...string) grpc.ServerOption {
+	return GateWayOpts(WithIncomingHeaderMatcher(keys))
+}
+
+// GatewayForwardHeadersByPrefix forwards HTTP headers with matching prefixes
+// to gRPC metadata in addition to the default passthrough headers.
+func GatewayForwardHeadersByPrefix(prefixes ...string) grpc.ServerOption {
+	return GateWayOpts(WithIncomingHeaderPrefixMatcher(prefixes))
+}
+
 // Timeout sets read and write timeouts for the internal HTTP server.
 func Timeout(read, write time.Duration) grpc.ServerOption {
 	return timeoutOpt{
@@ -218,6 +230,35 @@ func WithIncomingHeaderMatcher(keys []string) runtime.ServeMuxOption {
 		for _, k := range merged {
 			if k == canonicalKey || textproto.CanonicalMIMEHeaderKey(k) == canonicalKey {
 				return k, true
+			}
+		}
+		return runtime.DefaultHeaderMatcher(key)
+	})
+}
+
+// WithIncomingHeaderPrefixMatcher customizes which headers are forwarded from
+// HTTP to gRPC by matching canonicalized header prefixes.
+func WithIncomingHeaderPrefixMatcher(prefixes []string) runtime.ServeMuxOption {
+	canonicalPrefixes := make([]string, 0, len(prefixes))
+	for _, prefix := range prefixes {
+		if prefix == "" {
+			continue
+		}
+		canonicalPrefixes = append(canonicalPrefixes, textproto.CanonicalMIMEHeaderKey(prefix))
+	}
+	slices.Sort(canonicalPrefixes)
+	canonicalPrefixes = slices.Compact(canonicalPrefixes)
+
+	return runtime.WithIncomingHeaderMatcher(func(key string) (string, bool) {
+		canonicalKey := textproto.CanonicalMIMEHeaderKey(key)
+		for _, prefix := range canonicalPrefixes {
+			if strings.HasPrefix(canonicalKey, prefix) {
+				return canonicalKey, true
+			}
+		}
+		for _, k := range defaultGWPassthroughHeaders {
+			if textproto.CanonicalMIMEHeaderKey(k) == canonicalKey {
+				return canonicalKey, true
 			}
 		}
 		return runtime.DefaultHeaderMatcher(key)
