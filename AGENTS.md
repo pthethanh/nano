@@ -24,6 +24,14 @@ The design intent in this repository is:
 - When changing public behavior, add or update tests in the same area.
 - Keep dependencies minimal.
 
+## Package Boundaries
+- Treat top-level packages as independent modules inside the repository. A top-level package must not import another top-level package from this repository.
+- The same rule applies to subpackages. For example, code under `grpc/...` must not import `validator`, `metric`, `log`, `status`, `cache`, `broker`, `config`, or other top-level packages unless the exception is explicitly documented here.
+- If functionality from another top-level package is needed, define a small local interface in the consuming package and inject the real implementation at runtime.
+- Prefer constructor injection or option-based injection over package-level reach-through.
+- Tests should follow the same rule by default. Prefer local fakes, stubs, or adapters instead of importing a real implementation from another top-level package.
+- Before finalizing any change, inspect new imports in touched files. If a new import crosses a top-level package boundary, stop and redesign around an interface unless an explicit exception exists in this file.
+
 ## Coding Conventions
 - Use standard Go formatting.
 - Accept `context.Context` as the first parameter where appropriate.
@@ -74,4 +82,5 @@ If a task changes `.proto` definitions, generator behavior, or generated example
 2. Make the smallest change that satisfies the task.
 3. Update or add tests when behavior changes.
 4. Run focused validation commands.
-5. Summarize changed files, behavior, and any follow-up work.
+5. Verify that touched files did not introduce cross-package dependencies between top-level packages. If they did, redesign around a local interface and runtime injection.
+6. Summarize changed files, behavior, and any follow-up work.
