@@ -16,3 +16,16 @@
 ## [2026-04-14] maintenance | stream interceptor semantics and test dependency trim
 - Updated client stream tracing and metrics guidance to require lifecycle semantics instead of setup-only instrumentation under generic stream interceptor names.
 - Recorded a standing preference to avoid root-module tracing SDK dependencies when API-level local test doubles are sufficient.
+
+## [2026-04-14] maintenance | plugin validation alignment
+- Updated stale plugin module wiring so `GOWORK=off` validation uses the workspace `nano` module instead of older published releases.
+- Extended validation guidance and the boundary check script to cover plugin modules and local replace requirements explicitly.
+
+## [2026-04-14] maintenance | keep released module selectors honest
+- Reverted artificial `github.com/pthethanh/nano v0.0.2` bumps in local submodules.
+- Recorded a standing rule that local validation should rely on `replace`, not on invented version bumps that imply a release happened.
+
+## [2026-04-14] maintenance | workspace-first module wiring
+- Reverted the `GOWORK=off` policy from repo Makefiles and checks.
+- Removed redundant local `replace github.com/pthethanh/nano ...` directives from modules already covered by `go.work`.
+- Updated validation guidance to prefer workspace resolution as the primary integration path.

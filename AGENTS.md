@@ -23,6 +23,7 @@ The design intent in this repository is:
 - Generated files should not be edited manually unless the task is explicitly about generated output or generator templates.
 - When changing public behavior, add or update tests in the same area.
 - Keep dependencies minimal.
+- Agents should start with this file, then read `knowledge/index.md` and the most relevant `knowledge/wiki/*.md` pages before broad exploration.
 
 ## Knowledge Base
 - This repository maintains a persistent agent-written knowledge base under `knowledge/`.
@@ -35,6 +36,29 @@ The design intent in this repository is:
 - When you learn something durable about the repository, package behavior, workflow, or architecture, update the relevant page in `knowledge/wiki/` instead of leaving it only in chat history.
 - When the user gives a durable instruction about workflow, repository rules, file layout, or preferred patterns, update both `AGENTS.md` and the relevant page under `knowledge/wiki/`, then append a note to `knowledge/log.md`.
 - Keep knowledge pages concise, factual, and cross-linked. Prefer updating an existing page over creating duplicates.
+- Before finalizing any non-trivial task, either update the knowledge base for durable findings or explicitly confirm in the final response why no knowledge update was needed.
+- Keep workflow guidance centralized here and in `knowledge/wiki/` instead of duplicating it across package-local `AGENTS.md` files.
+- Do not bump submodule `require github.com/pthethanh/nano vX.Y.Z` selectors just to make local wiring work. Keep the selector on the intended released version.
+- For modules included in `go.work`, prefer workspace resolution over local `replace github.com/pthethanh/nano ...` directives.
+
+## Task Routing
+- Interceptor work:
+  - read `knowledge/wiki/interceptor-notes.md`
+  - prefer option-based construction and safe defaults
+  - keep interface or interceptor wiring in the entry file and concrete implementations in separate files
+  - validate with `go test ./grpc/interceptor/...`
+- gRPC client work:
+  - keep helpers thin and aligned with grpc-go and Kubernetes-first usage
+  - prefer native grpc-go dial options and config types
+  - validate with `go test ./grpc/client`
+- gRPC server work:
+  - preserve grpc-go server semantics
+  - keep lifecycle and option behavior explicit
+  - validate with `go test ./grpc/server`
+- Generator work:
+  - change generator logic before generated outputs
+  - regenerate affected outputs after generator changes
+  - validate with `go test ./cmd/protoc-gen-nano/...`
 
 ## Package Boundaries
 - Treat top-level packages as independent modules inside the repository. A top-level package must not import another top-level package from this repository.
@@ -84,6 +108,7 @@ If a task changes `.proto` definitions, generator behavior, or generated example
 - `examples/helloworld/`: end-to-end gRPC and gateway flow
 - `grpc/client/*` and `grpc/server/*`: preferred API style for gRPC helpers
 - existing `*_test.go` files: expected behavior and edge cases
+- `knowledge/wiki/*.md`: centralized persistent repo knowledge and workflow guidance
 
 ## Avoid
 - broad repo-wide refactors without a clear need
@@ -92,11 +117,12 @@ If a task changes `.proto` definitions, generator behavior, or generated example
 - changing generated files without updating the generator or source input
 
 ## Preferred Agent Workflow
-1. Read `knowledge/index.md` and the most relevant `knowledge/wiki/*.md` pages before broad code exploration.
+1. Read `AGENTS.md`, `knowledge/index.md`, and the most relevant `knowledge/wiki/*.md` pages before broad code exploration.
 2. Read the nearest package files and tests before editing.
 3. Make the smallest change that satisfies the task.
 4. Update or add tests when behavior changes.
 5. Run focused validation commands.
-6. Verify that touched files did not introduce cross-package dependencies between top-level packages. If they did, redesign around a local interface and runtime injection.
-7. Update the knowledge base for durable findings or new standing instructions, then append a short entry to `knowledge/log.md`.
-8. Summarize changed files, behavior, and any follow-up work.
+6. Run `./scripts/check-boundaries.sh` when touching imports, package structure, or public package layout.
+7. Verify that touched files did not introduce cross-package dependencies between top-level packages. If they did, redesign around a local interface and runtime injection.
+8. Update the knowledge base for durable findings or new standing instructions, then append a short entry to `knowledge/log.md`.
+9. Summarize changed files, behavior, and any follow-up work.
