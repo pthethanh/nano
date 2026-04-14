@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-
 	"time"
 
 	"github.com/google/uuid"
@@ -10,8 +9,10 @@ import (
 	"github.com/pthethanh/nano/grpc/health"
 	"github.com/pthethanh/nano/grpc/interceptor/logging"
 	"github.com/pthethanh/nano/grpc/interceptor/recovery"
+	"github.com/pthethanh/nano/grpc/interceptor/tracing"
 	"github.com/pthethanh/nano/grpc/server"
 	"github.com/pthethanh/nano/log"
+	metricgrpc "github.com/pthethanh/nano/metric/grpc"
 	"github.com/pthethanh/nano/metric/memory"
 	"google.golang.org/grpc"
 )
@@ -27,19 +28,6 @@ func (*HelloServer) SayHello(ctx context.Context, req *api.HelloRequest) (*api.H
 	return &api.HelloResponse{
 		Message: "Hello " + req.Name,
 	}, nil
-}
-
-func metricsInterceptor(metricSrv *memory.Reporter) grpc.UnaryServerInterceptor {
-	c := metricSrv.Counter("grpc_requests_total", "method")
-	h := metricSrv.Histogram("grpc_request_duration_seconds", []float64{0.1, 0.5, 1.0, 2.5, 5.0}, "method")
-	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-		c.With("method", info.FullMethod).Add(1)
-		start := time.Now()
-		defer func() {
-			h.With("method", info.FullMethod).Record(time.Since(start).Seconds())
-		}()
-		return handler(ctx, req)
-	}
 }
 
 func newHealthServer() *health.Server {
@@ -69,11 +57,12 @@ func main() {
 		server.Logger(log.Default()),
 		grpc.ChainUnaryInterceptor(
 			recovery.UnaryServerInterceptor(),
+			tracing.UnaryServerInterceptor(),
 			server.ContextUnaryInterceptor(logging.ServerContextLogger(log.AppendToContext, map[string]any{
 				"x-request-id": uuid.NewString,
 			})),
 			logging.UnaryServerInterceptor(log.Default(), logging.All()),
-			metricsInterceptor(metricSrv),
+			metricgrpc.UnaryServerInterceptor(metricSrv),
 		),
 		server.OnShutdown(func() { log.Info("cleaning up & saying goodbye....") }),
 	)

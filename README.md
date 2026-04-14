@@ -17,7 +17,7 @@ If you are using `nano` from another repository, import only the packages you ne
 
 Common starting points:
 - `github.com/pthethanh/nano/grpc/server`: gRPC server setup with optional HTTP gateway support
-- `github.com/pthethanh/nano/grpc/client`: gRPC client helpers and metadata forwarding helpers
+- `github.com/pthethanh/nano/grpc/client`: gRPC client helpers, metadata forwarding, and production dial options
 - `github.com/pthethanh/nano/config`: config loading from file, env, and remote providers
 - `github.com/pthethanh/nano/log`: context-aware structured logging built on `log/slog`
 - `github.com/pthethanh/nano/status`: gRPC-compatible status helpers and HTTP mapping utilities
@@ -25,6 +25,8 @@ Common starting points:
 - `github.com/pthethanh/nano/broker`: async message broker interface and implementations
 - `github.com/pthethanh/nano/cache`: cache interface and implementations
 - `github.com/pthethanh/nano/metric`: metric interfaces and in-memory reporter
+- `github.com/pthethanh/nano/grpc/interceptor/...`: composable gRPC middleware for auth, recovery, tracing, retry, rate limiting, and circuit breaking
+- `github.com/pthethanh/nano/metric/grpc`: reusable gRPC client/server metrics interceptors
 
 Recommended adoption path:
 1. Start with `grpc/server` and `grpc/client` if you are building a gRPC service.
@@ -191,11 +193,12 @@ The root `Makefile` also builds plugin and example modules.
 ## Features
 
 - **gRPC**: gRPC server and client helpers with HTTP gateway support
+- **Interceptors**: tracing, retry, rate limiting, circuit breaking, recovery, and logging helpers
 - **Broker**: asynchronous messaging interface with pluggable backends
 - **Cache**: generic cache interface with in-memory and Redis implementations
 - **Config**: configuration loading from files, env, and remote providers
 - **Log**: structured, context-aware logging with `slog`
-- **Metrics**: counters, gauges, histograms, and summaries
+- **Metrics**: counters, gauges, histograms, summaries, and reusable gRPC interceptors
 - **Status**: gRPC-compatible status helpers and HTTP mapping utilities
 - **Plugins**: optional plugin modules for broker and cache backends
 - **protoc-gen-nano**: code generator for service scaffolding and gateway output

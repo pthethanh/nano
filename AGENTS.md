@@ -24,6 +24,18 @@ The design intent in this repository is:
 - When changing public behavior, add or update tests in the same area.
 - Keep dependencies minimal.
 
+## Knowledge Base
+- This repository maintains a persistent agent-written knowledge base under `knowledge/`.
+- Structure:
+  - `knowledge/raw/`: immutable source notes and curated external references. Agents may add files here but should not rewrite existing raw source captures unless explicitly asked to refresh them.
+  - `knowledge/index.md`: content-oriented index of the knowledge base. Update it whenever adding or renaming a knowledge page.
+  - `knowledge/log.md`: append-only chronological log of important ingests, decisions, and maintenance passes. Add a short entry for every substantial task.
+  - `knowledge/wiki/`: synthesized markdown pages that summarize architecture, package behavior, decisions, and recurring agent instructions.
+- Before doing broad repo exploration, read `knowledge/index.md` and the most relevant `knowledge/wiki/*.md` pages first. Use the knowledge base to avoid rediscovering stable repo context from scratch.
+- When you learn something durable about the repository, package behavior, workflow, or architecture, update the relevant page in `knowledge/wiki/` instead of leaving it only in chat history.
+- When the user gives a durable instruction about workflow, repository rules, file layout, or preferred patterns, update both `AGENTS.md` and the relevant page under `knowledge/wiki/`, then append a note to `knowledge/log.md`.
+- Keep knowledge pages concise, factual, and cross-linked. Prefer updating an existing page over creating duplicates.
+
 ## Package Boundaries
 - Treat top-level packages as independent modules inside the repository. A top-level package must not import another top-level package from this repository.
 - The same rule applies to subpackages. For example, code under `grpc/...` must not import `validator`, `metric`, `log`, `status`, `cache`, `broker`, `config`, or other top-level packages unless the exception is explicitly documented here.
@@ -39,6 +51,8 @@ The design intent in this repository is:
 - Keep APIs small and explicit.
 - Avoid global mutable state unless the package already uses it deliberately.
 - Match the existing style in the touched package rather than imposing a new pattern.
+- When a package exposes an interface plus one or more default or concrete implementations, keep the interface/interceptor entrypoints in one file and put each concrete implementation in its own file in the same package. For example, keep interceptor wiring in `*.go` and move concrete implementations such as token buckets, semaphores, or threshold breakers into `token_bucket.go`, `semaphore.go`, or `threshold.go`.
+- When retry behavior needs backoff, prefer `google.golang.org/grpc/backoff.Config` semantics over introducing custom backoff APIs.
 
 ## Validation
 Use the narrowest command that proves the change.
@@ -78,9 +92,11 @@ If a task changes `.proto` definitions, generator behavior, or generated example
 - changing generated files without updating the generator or source input
 
 ## Preferred Agent Workflow
-1. Read the nearest package files and tests before editing.
-2. Make the smallest change that satisfies the task.
-3. Update or add tests when behavior changes.
-4. Run focused validation commands.
-5. Verify that touched files did not introduce cross-package dependencies between top-level packages. If they did, redesign around a local interface and runtime injection.
-6. Summarize changed files, behavior, and any follow-up work.
+1. Read `knowledge/index.md` and the most relevant `knowledge/wiki/*.md` pages before broad code exploration.
+2. Read the nearest package files and tests before editing.
+3. Make the smallest change that satisfies the task.
+4. Update or add tests when behavior changes.
+5. Run focused validation commands.
+6. Verify that touched files did not introduce cross-package dependencies between top-level packages. If they did, redesign around a local interface and runtime injection.
+7. Update the knowledge base for durable findings or new standing instructions, then append a short entry to `knowledge/log.md`.
+8. Summarize changed files, behavior, and any follow-up work.
