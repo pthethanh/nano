@@ -4,5 +4,6 @@ import "errors"
 
 // ErrUnknownServiceType is returned when the service type is not recognized.
 var (
-	ErrUnknownServiceType = errors.New("unknown service type")
+	ErrUnknownServiceType  = errors.New("unknown service type")
+	ErrDuplicateHTTPPrefix = errors.New("duplicate http handler prefix")
 )

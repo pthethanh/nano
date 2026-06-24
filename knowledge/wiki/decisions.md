@@ -19,6 +19,8 @@ Durable architectural decisions in this repository:
 - Retry behavior must be explicit and safe by default.
 - Retry backoff should use `google.golang.org/grpc/backoff.Config` semantics.
 - Stream tracing and stream metrics should reflect stream lifecycle, not only stream creation.
+- In `grpc/server`, outer HTTP mounts must be applied from the most specific prefix to the least specific prefix, and duplicate top-level prefixes should fail fast instead of silently shadowing routes.
+- `grpc/server.APIPrefix` is a gateway mount prefix, so the HTTP server should strip that prefix before forwarding requests into `grpc-gateway`.
 
 ## Dependencies
 - Keep dependencies minimal.

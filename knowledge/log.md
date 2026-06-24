@@ -29,3 +29,10 @@
 - Reverted the `GOWORK=off` policy from repo Makefiles and checks.
 - Removed redundant local `replace github.com/pthethanh/nano ...` directives from modules already covered by `go.work`.
 - Updated validation guidance to prefer workspace resolution as the primary integration path.
+
+## [2026-06-24] maintenance | grpc server HTTP mount precedence
+- Updated `grpc/server` to register outer HTTP mounts by descending prefix specificity and reject duplicate top-level prefixes.
+- Recorded that `grpc/server.APIPrefix` must strip the gateway mount prefix before forwarding requests into `grpc-gateway`.
+
+## [2026-06-24] maintenance | grpc server lazy init race fix
+- Synchronized lazy initialization and shutdown access for `grpc/server` internal server fields to avoid races between startup goroutines and shutdown under `go test -race`.

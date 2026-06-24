@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +33,27 @@ func (h testHTTPService) HTTPHandler() (string, http.Handler) {
 	return h.prefix, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, h.body)
 	})
+}
+
+type testGatewayService struct {
+	path string
+	body string
+}
+
+func (s testGatewayService) RegisterWithEndpoint(_ context.Context, mux *runtime.ServeMux, _ string, _ []grpc.DialOption) error {
+	return mux.HandlePath(http.MethodGet, s.path, func(w http.ResponseWriter, _ *http.Request, _ map[string]string) {
+		_, _ = io.WriteString(w, s.body)
+	})
+}
+
+type testGatewayParamService struct {
+	method string
+	path   string
+	fn     func(http.ResponseWriter, *http.Request, map[string]string)
+}
+
+func (s testGatewayParamService) RegisterWithEndpoint(_ context.Context, mux *runtime.ServeMux, _ string, _ []grpc.DialOption) error {
+	return mux.HandlePath(s.method, s.path, s.fn)
 }
 
 type testDescService interface {
@@ -211,6 +233,133 @@ func TestListenAndServeUsesNotFoundHandler(t *testing.T) {
 	}
 	if got, want := string(body), "missing\n"; got != want {
 		t.Fatalf("got body=%q, want %q", got, want)
+	}
+
+	stopErr := errors.New("stop server")
+	cancel(stopErr)
+	if err := <-errCh; !errors.Is(err, stopErr) && !errors.Is(err, context.Canceled) {
+		t.Fatalf("got err=%v, want shutdown cancellation", err)
+	}
+}
+
+func TestListenAndServePrefersLongerPrefixBeforeCatchAllHandler(t *testing.T) {
+	grpcLis := mustListen(t)
+	httpLis := mustListen(t)
+	t.Cleanup(func() {
+		_ = grpcLis.Close()
+		_ = httpLis.Close()
+	})
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+
+	srv := server.New(
+		server.SeparateListeners(grpcLis, httpLis),
+		server.APIPrefix("/api"),
+	)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- srv.ListenAndServe(ctx,
+			testHTTPService{prefix: "/", body: "catch-all"},
+			testGatewayService{path: "/hello", body: "gateway"},
+		)
+	}()
+
+	resp := waitForHTTP(t, "http://"+httpLis.Addr().String()+"/api/hello")
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(body), "gateway"; got != want {
+		t.Fatalf("got body=%q, want %q", got, want)
+	}
+
+	stopErr := errors.New("stop server")
+	cancel(stopErr)
+	if err := <-errCh; !errors.Is(err, stopErr) && !errors.Is(err, context.Canceled) {
+		t.Fatalf("got err=%v, want shutdown cancellation", err)
+	}
+}
+
+func TestListenAndServeRejectsDuplicateHTTPPrefix(t *testing.T) {
+	srv := server.New(
+		server.Address("127.0.0.1:8080"),
+		server.APIPrefix("/api/"),
+		server.Handler("/api", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})),
+	)
+
+	err := srv.ListenAndServe(context.Background(), &testDescServiceImpl{})
+	if !errors.Is(err, server.ErrDuplicateHTTPPrefix) {
+		t.Fatalf("got err=%v, want %v", err, server.ErrDuplicateHTTPPrefix)
+	}
+}
+
+func TestListenAndServeSupportsControlPlaneStyleGatewayRoutes(t *testing.T) {
+	grpcLis := mustListen(t)
+	httpLis := mustListen(t)
+	t.Cleanup(func() {
+		_ = grpcLis.Close()
+		_ = httpLis.Close()
+	})
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+
+	srv := server.New(server.SeparateListeners(grpcLis, httpLis))
+
+	if err := srv.ServeMux().HandlePath(http.MethodGet, "/api/v1/dashboard-config", func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
+		_, _ = io.WriteString(w, "dashboard:"+r.URL.Query().Get("dashboard_id"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.ServeMux().HandlePath(http.MethodGet, "/api/v1/pipelines/table/{table_name}", func(w http.ResponseWriter, _ *http.Request, pathParams map[string]string) {
+		_, _ = io.WriteString(w, "table:"+pathParams["table_name"])
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.ServeMux().HandlePath(http.MethodGet, "/casdoor/{path=**}", func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
+		_, _ = io.WriteString(w, "casdoor:"+strings.TrimPrefix(r.URL.Path, "/casdoor"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- srv.ListenAndServe(ctx,
+			testHTTPService{prefix: "/healthz", body: "ok"},
+			testGatewayParamService{
+				method: http.MethodGet,
+				path:   "/api/v1/tenants/{tenant_id}/workflows/{workflow_id}/alerts",
+				fn: func(w http.ResponseWriter, _ *http.Request, pathParams map[string]string) {
+					_, _ = io.WriteString(w, "alerts:"+pathParams["tenant_id"]+":"+pathParams["workflow_id"])
+				},
+			},
+		)
+	}()
+
+	testCases := []struct {
+		path string
+		want string
+	}{
+		{path: "/healthz", want: "ok"},
+		{path: "/api/v1/dashboard-config?dashboard_id=db-1", want: "dashboard:db-1"},
+		{path: "/api/v1/pipelines/table/orders", want: "table:orders"},
+		{path: "/api/v1/tenants/t-1/workflows/wf-9/alerts", want: "alerts:t-1:wf-9"},
+		{path: "/casdoor/.well-known/openid-configuration", want: "casdoor:/.well-known/openid-configuration"},
+	}
+
+	for _, tc := range testCases {
+		resp := waitForHTTP(t, "http://"+httpLis.Addr().String()+tc.path)
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := string(body); got != tc.want {
+			t.Fatalf("path %s: got body=%q, want %q", tc.path, got, tc.want)
+		}
 	}
 
 	stopErr := errors.New("stop server")

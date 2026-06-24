@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -36,6 +38,7 @@ type (
 		http2Srv *http2.Server
 
 		router *mux.Router
+		mu     sync.Mutex
 
 		// options
 		logger          logger
@@ -50,6 +53,7 @@ type (
 		tlsKeyFile      string
 		onShutdown      func()
 		apiPathPrefix   string
+		httpRoutes      []httpRoute
 	}
 
 	service interface {
@@ -68,6 +72,12 @@ type (
 
 	httpHandler interface {
 		HTTPHandler() (pathPrefix string, h http.Handler)
+	}
+
+	httpRoute struct {
+		prefix      string
+		h           http.Handler
+		stripPrefix bool
 	}
 )
 
@@ -108,6 +118,8 @@ func New(opts ...grpc.ServerOption) *Server {
 }
 
 func (srv *Server) httpServer() *http.Server {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
 	if srv.httpSrv == nil {
 		srv.httpSrv = &http.Server{
 			Addr:         srv.addr,
@@ -120,6 +132,8 @@ func (srv *Server) httpServer() *http.Server {
 }
 
 func (srv *Server) grpcGWServer() *runtime.ServeMux {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
 	if srv.grpcGw == nil {
 		srv.grpcGw = runtime.NewServeMux(srv.gwOpts...)
 	}
@@ -127,6 +141,8 @@ func (srv *Server) grpcGWServer() *runtime.ServeMux {
 }
 
 func (srv *Server) grpcServer() *grpc.Server {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
 	if srv.grpcSrv == nil {
 		srv.grpcSrv = grpc.NewServer(srv.serverOpts...)
 	}
@@ -221,7 +237,7 @@ func (srv *Server) applyCustomOption(opt customServerOption) {
 		srv.httpAddr = opt.httpAddr
 		srv.httpLis = nil
 	case handlerOpt:
-		srv.router.PathPrefix(opt.prefix).Handler(opt.h)
+		srv.httpRoutes = append(srv.httpRoutes, httpRoute{prefix: opt.prefix, h: opt.h})
 	case mdwOpt:
 		for _, mdw := range opt.mdws {
 			srv.router.Use(mdw)
@@ -314,10 +330,18 @@ func (srv *Server) shutdown(ctx context.Context) error {
 		newCtx = ctx
 		defer cancel()
 	}
-	if srv.grpcSrv != nil {
-		srv.grpcServer().GracefulStop()
+	srv.mu.Lock()
+	grpcSrv := srv.grpcSrv
+	httpSrv := srv.httpSrv
+	srv.mu.Unlock()
+
+	if grpcSrv != nil {
+		grpcSrv.GracefulStop()
 	}
-	return srv.httpServer().Shutdown(newCtx)
+	if httpSrv != nil {
+		return httpSrv.Shutdown(newCtx)
+	}
+	return nil
 }
 
 func (srv *Server) registerServices(ctx context.Context, services ...any) error {
@@ -342,11 +366,11 @@ func (srv *Server) registerServices(ctx context.Context, services ...any) error 
 		}
 		if h, ok := s.(httpHandler); ok {
 			prefix, h := h.HTTPHandler()
-			srv.router.PathPrefix(prefix).Handler(h)
+			srv.httpRoutes = append(srv.httpRoutes, httpRoute{prefix: prefix, h: h})
 			valid = true
 			serviceDetails = append(serviceDetails, "HTTP "+prefix)
 		} else if h, ok := s.(http.Handler); ok {
-			srv.router.Handle("/", h)
+			srv.httpRoutes = append(srv.httpRoutes, httpRoute{prefix: "/", h: h})
 			valid = true
 			serviceDetails = append(serviceDetails, "HTTP /")
 		}
@@ -355,8 +379,48 @@ func (srv *Server) registerServices(ctx context.Context, services ...any) error 
 		}
 		srv.logger.Log(ctx, slog.LevelInfo, "registered service successfully", "name", getTypeName(s), "details", serviceDetails)
 	}
-	srv.router.PathPrefix(srv.apiPathPrefix).Handler(srv.grpcGWServer())
+	srv.httpRoutes = append(srv.httpRoutes, httpRoute{prefix: srv.apiPathPrefix, h: srv.grpcGWServer(), stripPrefix: true})
+	return srv.registerHTTPRoutes()
+}
+
+func (srv *Server) registerHTTPRoutes() error {
+	seen := make(map[string]struct{}, len(srv.httpRoutes))
+	for _, mount := range srv.httpRoutes {
+		prefix := normalizeHTTPPrefix(mount.prefix)
+		if _, ok := seen[prefix]; ok {
+			return fmt.Errorf("%w: %s", ErrDuplicateHTTPPrefix, prefix)
+		}
+		seen[prefix] = struct{}{}
+	}
+
+	sort.SliceStable(srv.httpRoutes, func(i, j int) bool {
+		left := normalizeHTTPPrefix(srv.httpRoutes[i].prefix)
+		right := normalizeHTTPPrefix(srv.httpRoutes[j].prefix)
+		if len(left) != len(right) {
+			return len(left) > len(right)
+		}
+		return left < right
+	})
+
+	for _, mount := range srv.httpRoutes {
+		prefix := normalizeHTTPPrefix(mount.prefix)
+		handler := mount.h
+		if mount.stripPrefix && prefix != "/" {
+			handler = http.StripPrefix(prefix, handler)
+		}
+		srv.router.PathPrefix(prefix).Handler(handler)
+	}
 	return nil
+}
+
+func normalizeHTTPPrefix(prefix string) string {
+	if prefix == "" || prefix == "/" {
+		return "/"
+	}
+	if !strings.HasPrefix(prefix, "/") {
+		prefix = "/" + prefix
+	}
+	return strings.TrimRight(prefix, "/")
 }
 
 func (srv *Server) handler() http.Handler {
