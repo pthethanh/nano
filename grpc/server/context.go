@@ -2,10 +2,13 @@ package server
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 )
 
 // ContextServerStream wraps a grpc.ServerStream and overrides its context.
@@ -59,6 +62,22 @@ func IncomingMetadataValue(ctx context.Context, key string) string {
 		return ""
 	}
 	return values[0]
+}
+
+// PeerCertificate returns the verified leaf TLS certificate presented by the
+// caller on ctx's connection, for use with MutualTLS. It returns false if
+// the connection isn't over TLS or the peer presented no certificate (e.g.
+// TLS without client-certificate verification, or a non-TLS connection).
+func PeerCertificate(ctx context.Context) (*x509.Certificate, bool) {
+	p, ok := peer.FromContext(ctx)
+	if !ok || p.AuthInfo == nil {
+		return nil, false
+	}
+	tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
+	if !ok || len(tlsInfo.State.PeerCertificates) == 0 {
+		return nil, false
+	}
+	return tlsInfo.State.PeerCertificates[0], true
 }
 
 // RequireIncomingMetadata checks that the provided incoming metadata keys exist.

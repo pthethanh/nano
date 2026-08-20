@@ -37,6 +37,7 @@ build_plugins:
 	$(MAKE) -C  plugins/broker/watermill
 	$(MAKE) -C  plugins/cache/redis
 	$(MAKE) -C  examples/helloworld
+	$(MAKE) -C  examples/validation
 	$(MAKE) -C  examples/kafka
 
 install_tools: install_protobuf

@@ -1,9 +1,13 @@
 package server
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
 	"net"
 	"net/http"
 	"net/textproto"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -11,6 +15,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 )
 
 type (
@@ -47,9 +52,12 @@ type (
 
 	tlsOpt struct {
 		emptyOpt
-		certFile string
-		keyFile  string
-		dialOpt  []grpc.DialOption
+		certFile   string
+		keyFile    string
+		dialOpt    []grpc.DialOption
+		grpcCreds  credentials.TransportCredentials
+		clientAuth tls.ClientAuthType
+		clientCAs  *x509.CertPool
 	}
 
 	addrOpt struct {
@@ -91,6 +99,12 @@ type (
 
 	autoMaxProcsOpt struct {
 		emptyOpt
+	}
+
+	keepaliveOpt struct {
+		emptyOpt
+		params keepalive.ServerParameters
+		policy keepalive.EnforcementPolicy
 	}
 )
 
@@ -171,14 +185,80 @@ func TLS(certFile, keyFile string) grpc.ServerOption {
 // certificate paths from configuration and want to handle a bad path as a
 // normal error instead of a panic.
 func TLSErr(certFile, keyFile string) (grpc.ServerOption, error) {
-	creds, err := credentials.NewClientTLSFromFile(certFile, "")
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+	dialCreds, err := credentials.NewClientTLSFromFile(certFile, "")
 	if err != nil {
 		return nil, err
 	}
 	return tlsOpt{
 		keyFile:  keyFile,
 		certFile: certFile,
-		dialOpt:  []grpc.DialOption{grpc.WithTransportCredentials(creds)},
+		dialOpt:  []grpc.DialOption{grpc.WithTransportCredentials(dialCreds)},
+		// Also used for a gRPC listener started via SeparateAddresses /
+		// SeparateListeners, which bypasses the HTTP server's ServeTLS
+		// entirely and needs its own transport credentials.
+		grpcCreds: credentials.NewTLS(&tls.Config{Certificates: []tls.Certificate{cert}}),
+	}, nil
+}
+
+// MutualTLS enables mutual TLS: certFile/keyFile identify this server, and
+// clientCAFile is the CA (PEM-encoded) used to verify client certificates.
+// Only clients presenting a certificate signed by that CA are accepted.
+//
+// It also updates the server's self-dial options so the internal gateway
+// presents certFile/keyFile as its own client identity and trusts
+// clientCAFile to verify the gRPC server's certificate — this assumes the
+// same CA signs both the server certificate and client certificates, which
+// is the common case for a private internal mTLS setup.
+//
+// Panics if the certificate or CA file can't be loaded; use MutualTLSErr to
+// handle that as a normal error instead.
+func MutualTLS(certFile, keyFile, clientCAFile string) grpc.ServerOption {
+	opt, err := MutualTLSErr(certFile, keyFile, clientCAFile)
+	if err != nil {
+		panic(err)
+	}
+	return opt
+}
+
+// MutualTLSErr is the error-returning equivalent of MutualTLS.
+func MutualTLSErr(certFile, keyFile, clientCAFile string) (grpc.ServerOption, error) {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+	caPEM, err := os.ReadFile(clientCAFile)
+	if err != nil {
+		return nil, err
+	}
+	clientCAs := x509.NewCertPool()
+	if !clientCAs.AppendCertsFromPEM(caPEM) {
+		return nil, fmt.Errorf("server: no certificates found in client CA file %s", clientCAFile)
+	}
+
+	// The internal gateway self-dial must also present a client certificate
+	// and trust the same CA, since the gRPC server now requires and
+	// verifies client certificates on every connection, including its own
+	// gateway's.
+	dialCreds := credentials.NewTLS(&tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      clientCAs,
+	})
+
+	return tlsOpt{
+		certFile:   certFile,
+		keyFile:    keyFile,
+		dialOpt:    []grpc.DialOption{grpc.WithTransportCredentials(dialCreds)},
+		clientAuth: tls.RequireAndVerifyClientCert,
+		clientCAs:  clientCAs,
+		grpcCreds: credentials.NewTLS(&tls.Config{
+			Certificates: []tls.Certificate{cert},
+			ClientAuth:   tls.RequireAndVerifyClientCert,
+			ClientCAs:    clientCAs,
+		}),
 	}, nil
 }
 
@@ -284,6 +364,31 @@ func ShutdownTimeout(d time.Duration) grpc.ServerOption {
 // want this package to own that decision.
 func AutoMaxProcs() grpc.ServerOption {
 	return autoMaxProcsOpt{}
+}
+
+// Keepalive configures gRPC server-side keepalive ping parameters and
+// enforcement policy. Use this (or KeepaliveDefaults) so long-lived
+// connections behind L4 load balancers and NAT gateways aren't silently
+// dropped for inactivity.
+func Keepalive(params keepalive.ServerParameters, policy keepalive.EnforcementPolicy) grpc.ServerOption {
+	return keepaliveOpt{params: params, policy: policy}
+}
+
+// KeepaliveDefaults applies production-sensible keepalive settings: ping an
+// idle connection every 60s (20s timeout to react), and allow pings even
+// without active streams so a fully-idle connection is still probed rather
+// than silently dropped by an intermediary.
+func KeepaliveDefaults() grpc.ServerOption {
+	return Keepalive(
+		keepalive.ServerParameters{
+			Time:    60 * time.Second,
+			Timeout: 20 * time.Second,
+		},
+		keepalive.EnforcementPolicy{
+			MinTime:             30 * time.Second,
+			PermitWithoutStream: true,
+		},
+	)
 }
 
 // WithIncomingHeaderMatcher returns a grpc-gateway option that forwards the

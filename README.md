@@ -21,7 +21,7 @@ Common starting points:
 - `github.com/pthethanh/nano/config`: config loading from file, env, and remote providers
 - `github.com/pthethanh/nano/log`: context-aware structured logging built on `log/slog`
 - `github.com/pthethanh/nano/status`: gRPC-compatible status helpers and HTTP mapping utilities
-- `github.com/pthethanh/nano/validator`: request and struct validation helpers
+- `github.com/pthethanh/nano/validator`: protobuf request validation and gRPC interceptors
 - `github.com/pthethanh/nano/broker`: async message broker interface and implementations
 - `github.com/pthethanh/nano/cache`: cache interface and implementations
 - `github.com/pthethanh/nano/metric`: metric interfaces and in-memory reporter
@@ -34,6 +34,40 @@ Recommended adoption path:
 3. Add `log` for context-aware logging.
 4. Use `status` for consistent service errors.
 5. Add `validator`, `broker`, `cache`, or `metric` only where needed.
+
+## gRPC Request Validation
+
+Nano uses one validation model for gRPC requests: protobuf rules declared with
+`buf.validate` and evaluated by the `validator` package.
+
+```proto
+import "buf/validate/validate.proto";
+
+message HelloRequest {
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+}
+```
+
+Install the validator for unary and streaming requests when constructing the
+server:
+
+```go
+srv := server.New(
+	grpc.ChainUnaryInterceptor(
+		validator.UnaryServerInterceptor(validator.Default()),
+	),
+	grpc.ChainStreamInterceptor(
+		validator.StreamServerInterceptor(validator.Default()),
+	),
+)
+```
+
+Schema violations are returned as `codes.InvalidArgument` with structured
+Protovalidate violation details. Stateful business rules that require database
+or service calls remain the handler's responsibility.
+
+See [`examples/validation`](./examples/validation) for a standalone server and
+client that exercise both a valid request and a rejected request.
 
 ## Minimal gRPC Server
 

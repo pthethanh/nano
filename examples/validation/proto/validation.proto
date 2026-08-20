@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package validation.v1;
+option go_package = "github.com/pthethanh/nano/examples/validation/api;api";
+
+import "buf/validate/validate.proto";
+
+service RegistrationService {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+}
+
+message RegisterRequest {
+  string email = 1 [(buf.validate.field).string.email = true];
+  uint32 age = 2 [(buf.validate.field).uint32 = {
+    gte: 18,
+    lte: 120
+  }];
+}
+
+message RegisterResponse {
+  string message = 1;
+}

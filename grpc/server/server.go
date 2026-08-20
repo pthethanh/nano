@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log/slog"
 	"net"
@@ -52,6 +54,8 @@ type (
 		shutdownTimeout time.Duration
 		tlsCertFile     string
 		tlsKeyFile      string
+		tlsClientAuth   tls.ClientAuthType
+		tlsClientCAs    *x509.CertPool
 		onShutdown      func()
 		apiPathPrefix   string
 		httpRoutes      []httpRoute
@@ -128,6 +132,14 @@ func (srv *Server) httpServer() *http.Server {
 			Handler:      srv.handler(),
 			ReadTimeout:  srv.readTimeout,
 			WriteTimeout: srv.writeTimeout,
+		}
+		if srv.tlsClientAuth != tls.NoClientCert {
+			// ServeTLS still loads the certificate from tlsCertFile/tlsKeyFile;
+			// this only adds client-certificate verification on top of that.
+			srv.httpSrv.TLSConfig = &tls.Config{
+				ClientAuth: srv.tlsClientAuth,
+				ClientCAs:  srv.tlsClientCAs,
+			}
 		}
 	}
 	return srv.httpSrv
@@ -228,6 +240,15 @@ func (srv *Server) applyCustomOption(opt customServerOption) {
 		srv.tlsKeyFile = opt.keyFile
 		srv.secure = true
 		srv.dialOpts = append(srv.dialOpts, opt.dialOpt...)
+		srv.tlsClientAuth = opt.clientAuth
+		srv.tlsClientCAs = opt.clientCAs
+		if opt.grpcCreds != nil {
+			// Required for a gRPC listener started via SeparateAddresses /
+			// SeparateListeners: that listener is served with
+			// grpcServer().Serve(lis) directly, bypassing the HTTP
+			// server's ServeTLS (and thus its TLS termination) entirely.
+			srv.serverOpts = append(srv.serverOpts, grpc.Creds(opt.grpcCreds))
+		}
 	case lisOpt:
 		srv.lis = opt.lis
 		srv.addr = opt.lis.Addr().String()
@@ -248,6 +269,11 @@ func (srv *Server) applyCustomOption(opt customServerOption) {
 		srv.shutdownTimeout = opt.timeout
 	case autoMaxProcsOpt:
 		srv.autoMaxProcs = true
+	case keepaliveOpt:
+		srv.serverOpts = append(srv.serverOpts,
+			grpc.KeepaliveParams(opt.params),
+			grpc.KeepaliveEnforcementPolicy(opt.policy),
+		)
 	default:
 		// should not happen
 		srv.logger.Log(context.Background(), slog.LevelWarn, "unknown custom server option", "type", fmt.Sprintf("%T", opt))
@@ -457,6 +483,14 @@ func (srv *Server) singleAddressHandler() http.Handler {
 }
 
 func (srv *Server) useSingleAddress() bool {
+	// Prefer identity over string-parsing when both listeners are already
+	// set: an explicit Listener(lis) always reuses the same object for both,
+	// and some listeners (e.g. bufconn, used by NewTest) don't have
+	// a parseable host:port Addr(), which would otherwise misdetect this as
+	// separate-address mode and race two Accept() loops on one listener.
+	if srv.lis != nil && srv.httpLis != nil {
+		return srv.lis == srv.httpLis
+	}
 	h1, port1, err1 := net.SplitHostPort(srv.addr)
 	h2, port2, err2 := net.SplitHostPort(srv.httpAddr)
 	return err1 == nil && err2 == nil && port1 == port2 && h1 == h2

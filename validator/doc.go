@@ -1,3 +1,3 @@
-// Package validator wraps go-playground/validator with a small API for default
-// validators, context-aware validation, and partial field validation.
+// Package validator validates protobuf messages from buf.validate rules and
+// provides matching unary and streaming gRPC server interceptors.
 package validator

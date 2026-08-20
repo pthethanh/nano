@@ -14,4 +14,8 @@ use ./plugins/broker/watermill
 
 use ./plugins/cache/redis
 
+use ./plugins/ratelimit/redis
+
 use ./examples/helloworld
+
+use ./examples/validation

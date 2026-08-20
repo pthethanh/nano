@@ -11,10 +11,10 @@ The design intent in this repository is:
 
 ## Repository Map
 - `grpc/client/`, `grpc/server/`, `grpc/interceptor/`: gRPC helpers, server/client wiring, interceptors
-- `broker/`, `cache/`, `config/`, `log/`, `metric/`, `status/`, `validator/`: standalone library packages
+- `broker/`, `cache/`, `config/`, `log/`, `metric/`, `status/`, `validator/`: standalone library packages; `validator` is the single protobuf-native request-validation path
 - `cmd/protoc-gen-nano/`: nano code generator
 - `plugins/`: optional plugin implementations with their own `go.mod` files
-- `examples/helloworld/`, `examples/kafka/`: runnable reference integrations, also separate modules
+- `examples/helloworld/`, `examples/validation/`, `examples/kafka/`: runnable reference integrations, also separate modules
 
 ## Working Rules
 - Preserve the repository's modular design. Do not introduce dependencies between top-level packages.
@@ -54,7 +54,14 @@ The design intent in this repository is:
 - gRPC server work:
   - preserve grpc-go server semantics
   - keep lifecycle and option behavior explicit
+  - keep reusable server test helpers in `grpc/server`; do not create a separate `grpc/servertest` package
   - validate with `go test ./grpc/server`
+- Validation work:
+  - define structural request rules with `buf.validate` options in protobuf schemas
+  - keep protobuf validation and its unary/stream interceptors in `validator`; do not create a competing `grpc/interceptor/validation` package
+  - use the Buf Protovalidate runtime directly and keep interceptor wiring implemented locally in nano
+  - keep stateful business validation in handlers
+  - validate with `go test ./validator`
 - Generator work:
   - change generator logic before generated outputs
   - regenerate affected outputs after generator changes
@@ -106,6 +113,7 @@ If a task changes `.proto` definitions, generator behavior, or generated example
 ## Good Places To Learn Patterns
 - `README.md`: project intent and basic usage
 - `examples/helloworld/`: end-to-end gRPC and gateway flow
+- `examples/validation/`: minimal protobuf-native request-validation flow with runnable server and client
 - `grpc/client/*` and `grpc/server/*`: preferred API style for gRPC helpers
 - existing `*_test.go` files: expected behavior and edge cases
 - `knowledge/wiki/*.md`: centralized persistent repo knowledge and workflow guidance

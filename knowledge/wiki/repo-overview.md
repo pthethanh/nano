@@ -10,10 +10,12 @@ Core intent:
 
 Top-level package map:
 - `grpc/`: gRPC server, client, health, and interceptors
-- `broker/`, `cache/`, `config/`, `log/`, `metric/`, `status/`, `validator/`: standalone packages
+- `broker/`, `cache/`, `config/`, `log/`, `metric/`, `status/`: standalone packages
+- `validator/`: the single protobuf-native request-validation package, including gRPC interceptors
 - `cmd/protoc-gen-nano/`: generator
 - `plugins/`: optional implementations as separate modules
 - `examples/`: runnable examples as separate modules
+  - `examples/validation/` is the minimal runnable protobuf-validation reference
 
 Important repo documents:
 - [`README.md`](../../README.md)
