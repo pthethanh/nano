@@ -3,6 +3,7 @@ package memory_test
 import (
 	"context"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/pthethanh/nano/cache"
@@ -26,37 +27,43 @@ func TestCache(t *testing.T) {
 }
 
 func TestCacheTimeout(t *testing.T) {
-	var m cache.Cacher[string, []byte] = memory.New[string, []byte]()
-	m.Open(context.Background())
-	defer m.Close(context.Background())
-	// not ok
-	if err := m.Set(context.Background(), "k", []byte("v"), cache.TTL(500*time.Millisecond)); err != nil {
-		t.Fatal(err)
-	}
-	time.Sleep(600 * time.Millisecond)
-	if _, err := m.Get(context.Background(), "k"); err == nil {
-		t.Fatal("got key found, want key not found")
-	}
+	synctest.Test(t, func(t *testing.T) {
+		var m cache.Cacher[string, []byte] = memory.New[string, []byte]()
+		m.Open(context.Background())
+		defer m.Close(context.Background())
+		// not ok
+		if err := m.Set(context.Background(), "k", []byte("v"), cache.TTL(500*time.Millisecond)); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(600 * time.Millisecond)
+		synctest.Wait()
+		if _, err := m.Get(context.Background(), "k"); err == nil {
+			t.Fatal("got key found, want key not found")
+		}
 
-	// ok
-	if err := m.Set(context.Background(), "k", []byte("v"), cache.TTL(1000*time.Millisecond)); err != nil {
-		t.Fatal(err)
-	}
-	time.Sleep(500 * time.Millisecond)
-	if _, err := m.Get(context.Background(), "k"); err != nil {
-		t.Fatalf("got err=%v, want err=nil", err)
-	}
+		// ok
+		if err := m.Set(context.Background(), "k", []byte("v"), cache.TTL(1000*time.Millisecond)); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(500 * time.Millisecond)
+		synctest.Wait()
+		if _, err := m.Get(context.Background(), "k"); err != nil {
+			t.Fatalf("got err=%v, want err=nil", err)
+		}
 
-	// get should return err not found, even the cleaner has not done its job.
-	m = memory.New[string, []byte]()
-	_ = m.Open(context.Background())
-	if err := m.Set(context.Background(), "k", []byte("v"), cache.TTL(100*time.Millisecond)); err != nil {
-		t.Fatal(err)
-	}
-	time.Sleep(150 * time.Millisecond)
-	if _, err := m.Get(context.Background(), "k"); (err != nil && err != cache.ErrNotFound) || err == nil {
-		t.Fatalf("got err=%v, want err=cache.ErrNotFound", err)
-	}
+		// get should return err not found, even the cleaner has not done its job.
+		m = memory.New[string, []byte]()
+		_ = m.Open(context.Background())
+		defer m.Close(context.Background())
+		if err := m.Set(context.Background(), "k", []byte("v"), cache.TTL(100*time.Millisecond)); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(150 * time.Millisecond)
+		synctest.Wait()
+		if _, err := m.Get(context.Background(), "k"); (err != nil && err != cache.ErrNotFound) || err == nil {
+			t.Fatalf("got err=%v, want err=cache.ErrNotFound", err)
+		}
+	})
 }
 
 func TestCacheDelete(t *testing.T) {

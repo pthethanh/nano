@@ -13,8 +13,12 @@ const (
 )
 
 type (
-	requestKey    struct{}
-	anyContextKey struct{}
+	requestKey struct{}
+
+	// anyContextKey is parameterized by T so each distinct T gets its own
+	// comparable key type, giving each type its own isolated storage slot
+	// in the context instead of all types sharing a single key.
+	anyContextKey[T any] struct{}
 )
 
 // NewMethodContext adds the gRPC method name to the context via metadata.
@@ -45,14 +49,19 @@ func MethodFromContext(ctx context.Context) string {
 // This is automatically called by the unary interceptor.
 // Note: Request cannot be stored in metadata as it's not a string,
 // so it uses context.Value for storage.
-func NewRequestContext(ctx context.Context, req any) context.Context {
+func NewRequestContext[T any](ctx context.Context, req T) context.Context {
 	return context.WithValue(ctx, requestKey{}, req)
 }
 
-// RequestFromContext retrieves the gRPC request from the context.
-// Returns nil if not found.
-func RequestFromContext(ctx context.Context) any {
-	return ctx.Value(requestKey{})
+// RequestFromContext retrieves the gRPC request from the context as type T.
+// Returns false if not found or if the stored request is not of type T.
+//
+// Example:
+//
+//	req, ok := authz.RequestFromContext[*pb.GetUserRequest](ctx)
+func RequestFromContext[T any](ctx context.Context) (T, bool) {
+	v, ok := ctx.Value(requestKey{}).(T)
+	return v, ok
 }
 
 // NewSubjectContext adds the authenticated subject (user/role) to the context via metadata.
@@ -104,14 +113,14 @@ func SubjectFromContext(ctx context.Context) string {
 //	ctx = NewAnyContext(ctx, UserID(123))
 //	userID := FromAnyContext[UserID](ctx) // returns 123
 func NewAnyContext[T any](ctx context.Context, value T) context.Context {
-	return context.WithValue(ctx, anyContextKey{}, value)
+	return context.WithValue(ctx, anyContextKey[T]{}, value)
 }
 
 // FromAnyContext retrieves a value of type T from the context.
 // Returns the zero value of T if not found or type doesn't match.
 // Each unique type T has its own isolated context key, ensuring type safety.
 func FromAnyContext[T any](ctx context.Context) T {
-	if value, ok := ctx.Value(anyContextKey{}).(T); ok {
+	if value, ok := ctx.Value(anyContextKey[T]{}).(T); ok {
 		return value
 	}
 	var zero T

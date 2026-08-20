@@ -12,14 +12,14 @@ type tokenCredentials struct {
 }
 
 // NewTokenCredentials returns a PerRPCCredentials using the provided token.
-func NewTokenCredentials(token string, secure ...bool) credentials.PerRPCCredentials {
-	cred := tokenCredentials{
-		token: token,
+// secure controls RequireTransportSecurity: pass true unless the connection
+// is already known to be secured some other way (e.g. mTLS at a lower
+// layer, or a trusted local/internal network).
+func NewTokenCredentials(token string, secure bool) credentials.PerRPCCredentials {
+	return tokenCredentials{
+		token:  token,
+		secure: secure,
 	}
-	if len(secure) > 0 {
-		cred.secure = secure[0]
-	}
-	return cred
 }
 
 func (tok tokenCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {

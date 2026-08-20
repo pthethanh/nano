@@ -14,7 +14,7 @@ import (
 type Broker[T any] struct {
 	pub    message.Publisher
 	sub    message.Subscriber
-	codec  broker.Codec
+	codec  broker.Codec[T]
 	logger logger
 }
 
@@ -26,7 +26,7 @@ var (
 type Option[T any] func(*Broker[T])
 
 // Option to set a custom codec.
-func Codec[T any](c broker.Codec) Option[T] {
+func Codec[T any](c broker.Codec[T]) Option[T] {
 	return func(b *Broker[T]) {
 		b.codec = c
 	}
@@ -43,7 +43,7 @@ func New[T any](pub message.Publisher, sub message.Subscriber, opts ...Option[T]
 	b := &Broker[T]{
 		pub:    pub,
 		sub:    sub,
-		codec:  jsonCodec{}, // Use JSONCodec as default
+		codec:  jsonCodec[T]{}, // Use JSONCodec as default
 		logger: defaultLogger{},
 	}
 	for _, opt := range opts {
@@ -80,12 +80,18 @@ func (b *Broker[T]) Publish(ctx context.Context, topic string, m *T, opts ...bro
 		b.logger.Log(ctx, slog.LevelError, "publish failed: publisher not initialized")
 		return errors.New("publisher not initialized")
 	}
+	var popts broker.PublishOptions
+	popts.Apply(opts...)
+
 	data, err := b.codec.Marshal(m)
 	if err != nil {
 		b.logger.Log(ctx, slog.LevelError, "publish failed: marshal error", "error", err)
 		return err
 	}
 	msg := message.NewMessage(watermill.NewUUID(), data)
+	for k, v := range popts.Headers {
+		msg.Metadata.Set(k, v)
+	}
 	b.logger.Log(ctx, slog.LevelDebug, "publishing message", "topic", topic, "msg_id", msg.UUID)
 	err = b.pub.Publish(topic, msg)
 	if err != nil {
@@ -103,9 +109,14 @@ func (b *Broker[T]) Subscribe(ctx context.Context, topic string, handler func(br
 	}
 	opt := broker.SubscribeOptions{
 		AutoAck: true,
-		Queue:   "", // queue is not supported in watermill, so we ignore it for now.
 	}
 	opt.Apply(opts...)
+	if opt.Queue != "" {
+		// Queue groups are not supported by the watermill Publisher/Subscriber
+		// interfaces this broker is built on: every subscriber gets every
+		// message regardless of Queue.
+		b.logger.Log(ctx, slog.LevelWarn, "broker.Queue is not supported by the watermill broker and will be ignored; every subscriber receives every message", "topic", topic, "queue", opt.Queue)
+	}
 	newCtx, cancel := context.WithCancel(ctx)
 	messages, err := b.sub.Subscribe(newCtx, topic)
 	if err != nil {
@@ -131,6 +142,7 @@ func (b *Broker[T]) Subscribe(ctx context.Context, topic string, handler func(br
 					b.logger.Log(ctx, slog.LevelError, "failed to unmarshal message", "topic", topic, "error", err)
 					_ = handler(&event[T]{
 						topic:  topic,
+						raw:    msg,
 						err:    err,
 						reason: broker.ReasonUnmarshalFailure,
 					})
@@ -146,8 +158,9 @@ func (b *Broker[T]) Subscribe(ctx context.Context, topic string, handler func(br
 					msg.Ack()
 					b.logger.Log(ctx, slog.LevelDebug, "message acknowledged", "topic", topic, "msg_id", msg.UUID)
 				}
-			case <-ctx.Done():
+			case <-newCtx.Done():
 				b.logger.Log(ctx, slog.LevelDebug, "context done, stopping subscription", "topic", topic)
+				return
 			}
 		}
 	}()

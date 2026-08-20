@@ -19,15 +19,36 @@ func TestMethodContext(t *testing.T) {
 	}
 }
 
+type testRequest struct{ Name string }
+
 func TestRequestContext(t *testing.T) {
 	ctx := context.Background()
-	req := &struct{ Name string }{Name: "test"}
+	req := &testRequest{Name: "test"}
 
 	ctx = authz.NewRequestContext(ctx, req)
-	got := authz.RequestFromContext(ctx)
+	got, ok := authz.RequestFromContext[*testRequest](ctx)
 
-	if got != req {
-		t.Errorf("RequestFromContext() = %v, want %v", got, req)
+	if !ok || got != req {
+		t.Errorf("RequestFromContext() = (%v, %v), want (%v, true)", got, ok, req)
+	}
+}
+
+func TestRequestContext_WrongType(t *testing.T) {
+	ctx := context.Background()
+	ctx = authz.NewRequestContext(ctx, &testRequest{Name: "test"})
+
+	got, ok := authz.RequestFromContext[string](ctx)
+	if ok || got != "" {
+		t.Errorf("RequestFromContext[string]() = (%q, %v), want (\"\", false)", got, ok)
+	}
+}
+
+func TestRequestContext_NotFound(t *testing.T) {
+	ctx := context.Background()
+
+	got, ok := authz.RequestFromContext[*testRequest](ctx)
+	if ok || got != nil {
+		t.Errorf("RequestFromContext() = (%v, %v), want (nil, false)", got, ok)
 	}
 }
 
@@ -181,9 +202,9 @@ func TestNoContextCollisions(t *testing.T) {
 	})
 
 	t.Run("request not affected", func(t *testing.T) {
-		got := authz.RequestFromContext(ctx)
-		if got != "test-request" {
-			t.Errorf("RequestFromContext() = %v, want %q", got, "test-request")
+		got, ok := authz.RequestFromContext[string](ctx)
+		if !ok || got != "test-request" {
+			t.Errorf("RequestFromContext() = (%q, %v), want (%q, true)", got, ok, "test-request")
 		}
 	})
 
@@ -213,5 +234,24 @@ func TestOverwritingSameType(t *testing.T) {
 	got := authz.FromAnyContext[UserID](ctx)
 	if got != 200 {
 		t.Errorf("FromAnyContext[UserID]() = %d, want 200 (should be overwritten)", got)
+	}
+}
+
+// TestAnyContext_DifferentTypesDoNotCollide verifies that two different types stored via
+// NewAnyContext on the same context chain each get their own isolated key, instead of the
+// second value shadowing the first.
+func TestAnyContext_DifferentTypesDoNotCollide(t *testing.T) {
+	type UserID int
+	type SessionID string
+
+	ctx := context.Background()
+	ctx = authz.NewAnyContext(ctx, UserID(1))
+	ctx = authz.NewAnyContext(ctx, SessionID("abc"))
+
+	if got := authz.FromAnyContext[UserID](ctx); got != UserID(1) {
+		t.Errorf("FromAnyContext[UserID]() = %d, want 1", got)
+	}
+	if got := authz.FromAnyContext[SessionID](ctx); got != SessionID("abc") {
+		t.Errorf("FromAnyContext[SessionID]() = %q, want %q", got, "abc")
 	}
 }

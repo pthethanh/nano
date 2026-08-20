@@ -83,7 +83,12 @@ func StreamClientInterceptor(opts ...Option) grpc.StreamClientInterceptor {
 			span.End()
 			return nil, err
 		}
-		return &clientStream{ClientStream: stream, span: span}, nil
+		cs := &clientStream{ClientStream: stream, span: span}
+		// Safety net: if the stream is simply abandoned (ctx cancelled)
+		// without ever hitting a terminal error on one of the wrapped
+		// methods, still end the span instead of leaking it.
+		cs.stop = context.AfterFunc(ctx, func() { cs.finish(ctx.Err()) })
+		return cs, nil
 	}
 }
 

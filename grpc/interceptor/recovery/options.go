@@ -2,8 +2,11 @@ package recovery
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"runtime"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type (
@@ -19,7 +22,10 @@ type (
 		handler Handler
 	}
 
-	// Error is the error type returned by the default recovery handler.
+	// Error carries the recovered panic value and stack trace for a custom
+	// Handler's own use (e.g. logging). Its Error() message deliberately
+	// omits both, since a Handler's returned error is what the RPC caller
+	// sees on the wire.
 	Error struct {
 		Err   any
 		Stack []byte
@@ -33,12 +39,16 @@ func WithHandler(f Handler) Option {
 	}
 }
 
-// StackHandler customizes the size of stack trace to be captured.
+// StackHandler builds a Handler that captures a stack trace of up to stackSize
+// bytes, logs the recovered panic and stack server-side via slog, and returns
+// a generic codes.Internal error to the RPC caller. The panic value and stack
+// trace are never included in the error returned to the caller.
 func StackHandler(stackSize int) Handler {
 	return func(ctx context.Context, p any) error {
 		stack := make([]byte, stackSize)
 		stack = stack[:runtime.Stack(stack, false)]
-		return &Error{Err: p, Stack: stack}
+		slog.ErrorContext(ctx, "panic recovered", "panic", p, "stack", string(stack))
+		return status.Error(codes.Internal, "internal error")
 	}
 }
 
@@ -52,6 +62,9 @@ func newOpts(opts ...Option) *options {
 	return opt
 }
 
+// Error implements the error interface without including the panic value or
+// stack trace, since this message can end up on the wire as an RPC status
+// message. Use the Err and Stack fields directly for server-side logging.
 func (e *Error) Error() string {
-	return fmt.Sprintf("panic recovered: %v\n\n%s", e.Err, e.Stack)
+	return "panic recovered"
 }

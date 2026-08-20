@@ -17,6 +17,7 @@ type clientStream struct {
 	counter   metric.Counter
 	histogram metric.Histogram
 	once      sync.Once
+	stop      func() bool
 }
 
 func (s *clientStream) Header() (metadata.MD, error) {
@@ -53,6 +54,9 @@ func (s *clientStream) CloseSend() error {
 
 func (s *clientStream) finish(err error) {
 	s.once.Do(func() {
+		if s.stop != nil {
+			s.stop()
+		}
 		if err == io.EOF {
 			err = nil
 		}

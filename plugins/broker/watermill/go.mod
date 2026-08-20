@@ -1,6 +1,6 @@
 module github.com/pthethanh/nano/plugins/broker/watermill
 
-go 1.24.5
+go 1.27.0
 
 require (
 	github.com/Shopify/sarama v1.38.0

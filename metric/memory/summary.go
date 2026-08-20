@@ -23,7 +23,7 @@ type summary struct {
 	hv   *prometheus.SummaryVec
 }
 
-func newSummary(name string, objectives map[float64]float64, maxAge time.Duration, labels ...string) *summary {
+func newSummary(reg prometheus.Registerer, name string, objectives map[float64]float64, maxAge time.Duration, labels ...string) *summary {
 	obj := objectives
 	if len(objectives) == 0 {
 		obj = defaultObjective
@@ -37,7 +37,7 @@ func newSummary(name string, objectives map[float64]float64, maxAge time.Duratio
 		Objectives: obj,
 		MaxAge:     age,
 	}, labels)
-	prometheus.MustRegister(hv)
+	reg.MustRegister(hv)
 	return &summary{
 		lbvl: &lbvl{},
 		hv:   hv,

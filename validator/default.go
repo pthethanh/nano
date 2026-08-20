@@ -29,12 +29,8 @@ func Default(tags ...string) *Validator {
 	if len(tags) > 0 {
 		tag = tags[0]
 	}
-	if v, ok := def.Load(tag); ok {
-		return v.(*Validator)
-	}
-	v := New(tag)
-	def.Store(tag, v)
-	return v
+	v, _ := def.LoadOrStore(tag, New(tag))
+	return v.(*Validator)
 }
 
 // Validate validates v using the default validator and its configured tags.

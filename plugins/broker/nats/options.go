@@ -6,15 +6,14 @@ import (
 )
 
 // Codec is an option to provide a custom codec.
-func Codec[T any](codec broker.Codec) Option[T] {
+func Codec[T any](codec broker.Codec[T]) Option[T] {
 	return func(opts *Nats[T]) {
 		opts.codec = codec
 	}
 }
 
-// Address is an option to set target addresses of NATS server.
-// Multiple addresses are separated by comma.
-func Address[T any](addrs string) Option[T] {
+// Address is an option to set target addresses of the NATS server(s).
+func Address[T any](addrs ...string) Option[T] {
 	return func(opts *Nats[T]) {
 		opts.addrs = addrs
 	}

@@ -31,3 +31,8 @@ Use the narrowest command that proves the change.
 ## Final validation rule
 - prefer focused package tests before broad repo-wide runs
 - use broad validation only when the change spans multiple packages or surfaces
+
+## Concurrency tests: testing/synctest
+- when a test only synchronizes in-process goroutines with `time.Sleep` (timers, TTLs, polling loops), prefer wrapping it in `testing/synctest.Test` with `synctest.Wait()` instead of real sleeps; see `cache/memory/memory_test.go` `TestCacheTimeout` for the pattern
+- do not use `testing/synctest` for tests that hit real network sockets or external processes (real HTTP servers, external brokers like Kafka) — synctest requires every bubble goroutine to be "durably blocked" on in-bubble primitives, and real I/O blocking does not qualify; it will deadlock/panic
+- wrapping a test in synctest can surface pre-existing goroutine leaks (an unclosed background worker keeps the bubble's root goroutine from exiting cleanly) — treat that as a real bug to fix in the test, not a reason to avoid synctest

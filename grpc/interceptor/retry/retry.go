@@ -58,6 +58,10 @@ func WithRetryableCodes(retryableCodes ...codes.Code) Option {
 }
 
 // UnaryClientInterceptor returns a client interceptor that retries failed unary calls.
+//
+// By default it retries nothing: the zero-value classifier always returns
+// false. Pass WithRetryableCodes or WithShouldRetry to actually enable
+// retries; without one of those, adding this interceptor is a no-op.
 func UnaryClientInterceptor(opts ...Option) grpc.UnaryClientInterceptor {
 	o := newOptions(opts...)
 	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, callOpts ...grpc.CallOption) error {
@@ -76,6 +80,10 @@ func UnaryClientInterceptor(opts ...Option) grpc.UnaryClientInterceptor {
 }
 
 // StreamClientInterceptor returns a client interceptor that retries stream setup failures.
+//
+// By default it retries nothing: the zero-value classifier always returns
+// false. Pass WithRetryableCodes or WithShouldRetry to actually enable
+// retries; without one of those, adding this interceptor is a no-op.
 func StreamClientInterceptor(opts ...Option) grpc.StreamClientInterceptor {
 	o := newOptions(opts...)
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, callOpts ...grpc.CallOption) (grpc.ClientStream, error) {

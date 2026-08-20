@@ -1,6 +1,10 @@
 package concurrencylimit
 
-import "context"
+import (
+	"context"
+
+	"google.golang.org/grpc/status"
+)
 
 // Semaphore is a bounded in-memory limiter.
 type Semaphore struct {
@@ -20,7 +24,9 @@ func (s *Semaphore) Acquire(ctx context.Context) error {
 	case s.ch <- struct{}{}:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		// Map to a proper gRPC status code (Canceled/DeadlineExceeded)
+		// instead of surfacing the raw context error as codes.Unknown.
+		return status.FromContextError(ctx.Err()).Err()
 	}
 }
 

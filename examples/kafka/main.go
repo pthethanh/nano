@@ -30,7 +30,7 @@ func main() {
 	log := log.Named("kafka")
 	conf := config.MustRead[Conf](context.Background(), config.WithPaths("config.local", "yaml", "."))
 	br := kafka.New(
-		kafka.Address[Data](conf.Addresses),
+		kafka.Address[Data](conf.Addresses...),
 		kafka.SASL[Data](conf.User, conf.Password),
 		kafka.Logger[Data](log),
 	)

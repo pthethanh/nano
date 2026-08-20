@@ -38,7 +38,7 @@ func ServerContextLogger(appendToContext AppendToContextFunc, attrsWithDefault m
 func ClientContextLogger(appendToContext AppendToContextFunc, attrsWithDefault map[string]any) func(ctx context.Context) (context.Context, error) {
 	return contextLogger(appendToContext, func(ctx context.Context, key string) []string {
 		md, _ := metadata.FromOutgoingContext(ctx)
-		return md[key]
+		return md.Get(key)
 	}, attrsWithDefault)
 }
 
@@ -161,7 +161,9 @@ func logResponse(logger logger, ctx context.Context, msg string, o *options, met
 	if o.logMethod {
 		attrs = append(attrs, "grpc.method", method)
 	}
-	attrs = append(attrs, "grpc.response", res)
+	if o.logResponse {
+		attrs = append(attrs, "grpc.response", res)
+	}
 	attrs = append(attrs, "grpc.error", err)
 	if o.logDuration {
 		attrs = append(attrs, "grpc.duration", duration.String())

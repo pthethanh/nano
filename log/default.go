@@ -5,41 +5,40 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"sync"
 	"sync/atomic"
 
 	"github.com/pthethanh/nano/log/zap"
 )
 
-var (
-	def  atomic.Pointer[Logger]
-	once sync.Once
-)
+var def atomic.Pointer[Logger]
 
-// SetDefault sets the default logger.
+// SetDefault sets the default logger. Passing nil resets it: the next
+// Default() call lazily constructs a fresh one instead of returning nil.
 func SetDefault(log *Logger) {
 	def.Store(log)
 }
 
 // Default returns the default logger, creating one if needed.
 func Default() *Logger {
-	once.Do(func() {
-		if def.Load() != nil {
-			return
-		}
-		log := &Logger{
-			Logger: slog.New(zap.NewHandler(zap.Config{
-				Name:             getEnv("LOG_NAME", ""),
-				Format:           getEnv("LOG_FORMAT", "json"),
-				AddSource:        getEnv("LOG_ADDSOURCE", "false") == "true",
-				Level:            getEnv("LOG_LEVEL", slog.LevelDebug.String()),
-				OutputPaths:      strings.Split(getEnv("LOG_OUTPUTPATHS", "stderr"), ","),
-				ErrorOutputPaths: strings.Split(getEnv("LOG_ERROROUTPUTPATHS", "stderr"), ","),
-			})),
-		}
-		def.Store(log)
-	})
-	return def.Load()
+	if log := def.Load(); log != nil {
+		return log
+	}
+	log := &Logger{
+		Logger: slog.New(zap.NewHandler(zap.Config{
+			Name:             getEnv("LOG_NAME", ""),
+			Format:           getEnv("LOG_FORMAT", "json"),
+			AddSource:        getEnv("LOG_ADDSOURCE", "false") == "true",
+			Level:            getEnv("LOG_LEVEL", slog.LevelDebug.String()),
+			OutputPaths:      strings.Split(getEnv("LOG_OUTPUTPATHS", "stderr"), ","),
+			ErrorOutputPaths: strings.Split(getEnv("LOG_ERROROUTPUTPATHS", "stderr"), ","),
+		})),
+	}
+	if !def.CompareAndSwap(nil, log) {
+		// Someone else concurrently installed one first; use that instead
+		// of the one we just built.
+		return def.Load()
+	}
+	return log
 }
 
 // Named returns a logger with the given name.

@@ -2,14 +2,17 @@ package circuitbreaker
 
 import (
 	"context"
-	"errors"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 )
 
-var ErrOpen = errors.New("circuit breaker is open")
+// ErrOpen is returned by the built-in Breaker implementations when the
+// breaker is open. It carries codes.ResourceExhausted so clients (and this
+// package's own retry-code-based helpers) can branch on it instead of
+// seeing codes.Unknown.
+var ErrOpen = grpcstatus.Error(codes.ResourceExhausted, "circuit breaker is open")
 
 type options struct {
 	shouldTrip func(error) bool

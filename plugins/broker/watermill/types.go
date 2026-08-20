@@ -15,13 +15,13 @@ type logger interface {
 }
 
 // jsonCodec implements broker.Codec using encoding/json.
-type jsonCodec struct{}
+type jsonCodec[T any] struct{}
 
-func (jsonCodec) Marshal(v any) ([]byte, error) {
+func (jsonCodec[T]) Marshal(v *T) ([]byte, error) {
 	return json.Marshal(v)
 }
 
-func (jsonCodec) Unmarshal(data []byte, v any) error {
+func (jsonCodec[T]) Unmarshal(data []byte, v *T) error {
 	return json.Unmarshal(data, v)
 }
 

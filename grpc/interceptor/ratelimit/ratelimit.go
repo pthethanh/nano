@@ -2,12 +2,16 @@ package ratelimit
 
 import (
 	"context"
-	"errors"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-var ErrLimited = errors.New("rate limit exceeded")
+// ErrLimited is returned by the built-in Limiter implementations when a
+// call is rejected. It carries codes.ResourceExhausted so clients can
+// branch on it instead of seeing codes.Unknown.
+var ErrLimited = status.Error(codes.ResourceExhausted, "rate limit exceeded")
 
 // Limiter reports whether a call is allowed to proceed.
 type Limiter interface {

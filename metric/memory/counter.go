@@ -10,11 +10,11 @@ type counter struct {
 	cv   *prometheus.CounterVec
 }
 
-func newCounter(name string, labels ...string) *counter {
+func newCounter(reg prometheus.Registerer, name string, labels ...string) *counter {
 	cv := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: name,
 	}, labels)
-	prometheus.MustRegister(cv)
+	reg.MustRegister(cv)
 	return &counter{
 		lbvl: &lbvl{},
 		cv:   cv,

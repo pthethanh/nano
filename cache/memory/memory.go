@@ -1,4 +1,5 @@
-// Package memory provides a cache service using in-memory implementation of dgraph-io/ristretto.
+// Package memory provides a cache service using an in-memory implementation
+// backed by jellydator/ttlcache.
 package memory
 
 import (
@@ -26,7 +27,12 @@ func New[K comparable, V any](opts ...ttlcache.Option[K, V]) *Cacher[K, V] {
 	}
 }
 
-// Open establish connection to the target server.
+// Open starts the background sweep goroutine that proactively evicts
+// expired entries. It is not required before calling Get/Set/Delete: the
+// cache is fully usable immediately after New, and Get already treats an
+// expired entry as not found even if it hasn't been swept yet. Calling Open
+// more than once is safe (ttlcache.Start is idempotent while already
+// running).
 func (c *Cacher[K, V]) Open(ctx context.Context) error {
 	go c.cache.Start()
 	return nil
@@ -67,7 +73,11 @@ func (c *Cacher[K, V]) Delete(ctx context.Context, k K) error {
 	return nil
 }
 
-// Close close the underlying connection.
+// Close stops the background sweep goroutine and clears all entries.
+// Unlike Get/Set/Delete, Close deliberately ignores validate()'s error and
+// always returns nil: closing an already-invalid or never-opened Cacher is
+// treated as already-closed rather than an error, so callers can safely
+// defer Close() without checking whether Open() ever ran or succeeded.
 func (c *Cacher[K, V]) Close(ctx context.Context) error {
 	if err := c.validate(); err != nil {
 		return nil

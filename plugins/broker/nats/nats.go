@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/nats-io/nats.go"
 	"github.com/pthethanh/nano/broker"
@@ -17,8 +18,8 @@ type (
 		opts []nats.Option
 		log  logger
 
-		addrs string
-		codec broker.Codec
+		addrs []string
+		codec broker.Codec[T]
 	}
 
 	// Option is an optional configuration.
@@ -33,8 +34,8 @@ var (
 func New[T any](opts ...Option[T]) *Nats[T] {
 	n := &Nats[T]{
 		log:   slog.Default(),
-		codec: JSONCodec{},
-		addrs: "127.0.0.1:4222",
+		codec: JSONCodec[T]{},
+		addrs: []string{"127.0.0.1:4222"},
 	}
 	// apply the options.
 	for _, opt := range opts {
@@ -45,7 +46,7 @@ func New[T any](opts ...Option[T]) *Nats[T] {
 
 // Open connect to target server.
 func (n *Nats[T]) Open(ctx context.Context) error {
-	conn, err := nats.Connect(n.addrs, n.opts...)
+	conn, err := nats.Connect(strings.Join(n.addrs, ","), n.opts...)
 	if err != nil {
 		return err
 	}
@@ -55,11 +56,21 @@ func (n *Nats[T]) Open(ctx context.Context) error {
 
 // Publish implements broker.Broker interface.
 func (n *Nats[T]) Publish(ctx context.Context, topic string, m *T, opts ...broker.PublishOption) error {
+	var popts broker.PublishOptions
+	popts.Apply(opts...)
+
 	b, err := n.codec.Marshal(m)
 	if err != nil {
 		return err
 	}
-	return n.conn.Publish(topic, b)
+	if len(popts.Headers) == 0 {
+		return n.conn.Publish(topic, b)
+	}
+	return n.conn.PublishMsg(&nats.Msg{
+		Subject: topic,
+		Data:    b,
+		Header:  natsHeaderFrom(popts.Headers),
+	})
 }
 
 // Subscribe implements broker.Broker interface.
@@ -116,6 +127,10 @@ func (n *Nats[T]) CheckHealth(ctx context.Context) error {
 
 // Close flush in-flight messages and close the underlying connection.
 func (n *Nats[T]) Close(ctx context.Context) error {
+	if n.conn == nil {
+		// Open() was never called (or never succeeded): nothing to close.
+		return nil
+	}
 	err := n.conn.FlushWithContext(ctx)
 	if err != nil {
 		return err

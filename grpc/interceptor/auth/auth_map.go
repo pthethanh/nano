@@ -1,9 +1,9 @@
 package auth
 
 import (
+	"context"
 	"strings"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -28,11 +28,17 @@ func (m MapAuthenticator) Authenticate(ctx context.Context) (context.Context, er
 	kv := strings.Fields(slice[0])
 	k := ""
 	v := ""
-	if len(kv) == 1 {
+	switch len(kv) {
+	case 1:
 		v = kv[0]
-	} else if len(kv) == 2 {
+	case 2:
 		k = kv[0]
 		v = kv[1]
+	default:
+		// Neither a bare token nor a "scheme value" pair: reject outright
+		// instead of falling through to the "" (default/catch-all)
+		// authenticator with an empty value.
+		return nil, ErrInvalidToken
 	}
 	if a, ok := m[k]; ok {
 		md := md.Copy()

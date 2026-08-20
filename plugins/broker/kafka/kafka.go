@@ -11,20 +11,20 @@ import (
 	"github.com/pthethanh/nano/broker"
 )
 
+// Broker is an implementation of broker.Broker using Kafka (via sarama).
 type Broker[T any] struct {
 	addrs            []string
 	conf             *sarama.Config
-	codec            broker.Codec
+	codec            broker.Codec[T]
 	log              logger
 	async            bool
-	onPublishFailure func(*PublishError)
+	onPublishFailure func(*PublishError[T])
 	onPublishSuccess func(*T)
 
 	client         sarama.Client
 	syncProducer   sarama.SyncProducer
 	asyncProducer  sarama.AsyncProducer
 	consumerGroups []sarama.ConsumerGroup
-	connected      bool
 	mu             sync.Mutex
 }
 
@@ -32,11 +32,12 @@ var (
 	_ broker.Broker[any] = (*Broker[any])(nil)
 )
 
+// New returns a new Kafka message broker.
 func New[T any](opts ...Option[T]) *Broker[T] {
 	k := &Broker[T]{
 		conf:  sarama.NewConfig(),
 		log:   slog.Default(),
-		codec: JSONCodec{},
+		codec: JSONCodec[T]{},
 		addrs: []string{"127.0.0.1:9092"},
 	}
 	for _, o := range opts {
@@ -45,10 +46,9 @@ func New[T any](opts ...Option[T]) *Broker[T] {
 	return k
 }
 
+// Open connects to the target Kafka cluster and starts a sync or async
+// producer, depending on the AsyncPublish option.
 func (k *Broker[T]) Open(context.Context) error {
-	if k.connected {
-		return nil
-	}
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	if k.client != nil {
@@ -68,15 +68,7 @@ func (k *Broker[T]) Open(context.Context) error {
 				f := func(*sarama.ProducerError) {}
 				if k.onPublishFailure != nil {
 					f = func(err *sarama.ProducerError) {
-						pErr := &PublishError{
-							Error: err.Err,
-						}
-						if err.Msg.Metadata != nil {
-							if v, ok := err.Msg.Metadata.(*broker.Message); ok {
-								pErr.Message = v
-							}
-						}
-						k.onPublishFailure(pErr)
+						k.onPublishFailure(publishErrorFrom[T](err))
 					}
 				}
 				for err := range p.Errors() {
@@ -119,12 +111,15 @@ func (k *Broker[T]) Open(context.Context) error {
 		k.syncProducer = p
 	}
 	k.consumerGroups = make([]sarama.ConsumerGroup, 0)
-	k.connected = true
 	k.log.Log(context.Background(), slog.LevelInfo, "connected", "address", k.addrs, "async", k.async)
 	return nil
 }
 
+// Publish implements broker.Broker interface.
 func (k *Broker[T]) Publish(ctx context.Context, topic string, msg *T, opts ...broker.PublishOption) error {
+	var popts broker.PublishOptions
+	popts.Apply(opts...)
+
 	b, err := k.codec.Marshal(msg)
 	if err != nil {
 		return err
@@ -132,6 +127,7 @@ func (k *Broker[T]) Publish(ctx context.Context, topic string, msg *T, opts ...b
 	m := &sarama.ProducerMessage{
 		Topic:    topic,
 		Value:    sarama.ByteEncoder(b),
+		Headers:  recordHeadersFrom(popts.Headers),
 		Metadata: msg,
 	}
 	if k.async {
@@ -143,6 +139,8 @@ func (k *Broker[T]) Publish(ctx context.Context, topic string, msg *T, opts ...b
 	}
 }
 
+// Subscribe implements broker.Broker interface. Each call creates its own
+// consumer group (defaulting to a random group ID via broker.Queue).
 func (k *Broker[T]) Subscribe(ctx context.Context, topic string, handler func(broker.Event[T]) error, opts ...broker.SubscribeOption) (broker.Subscriber, error) {
 	opt := broker.SubscribeOptions{
 		AutoAck: true,
@@ -211,14 +209,21 @@ func (k *Broker[T]) newConsumerGroup(groupID string) (sarama.ConsumerGroup, erro
 	return cg, nil
 }
 
+// String returns the broker name.
 func (k *Broker[T]) String() string {
 	return "kafka"
 }
 
+// Close flushes and closes producers and consumer groups, and closes the
+// underlying client connection.
 func (k *Broker[T]) Close(ctx context.Context) error {
 	k.log.Log(ctx, slog.LevelInfo, "closing")
 	k.mu.Lock()
 	defer k.mu.Unlock()
+	if k.client == nil {
+		// Open() was never called (or never succeeded): nothing to close.
+		return nil
+	}
 	for _, consumer := range k.consumerGroups {
 		consumer.Close()
 	}
@@ -232,6 +237,5 @@ func (k *Broker[T]) Close(ctx context.Context) error {
 	if err := k.client.Close(); err != nil {
 		return err
 	}
-	k.connected = false
 	return nil
 }

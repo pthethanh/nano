@@ -9,7 +9,7 @@ import (
 type consumerGroupHandler[T any] struct {
 	handler  func(broker.Event[T]) error
 	opts     broker.SubscribeOptions
-	codec    broker.Codec
+	codec    broker.Codec[T]
 	log      logger
 	consumer sarama.ConsumerGroup
 }

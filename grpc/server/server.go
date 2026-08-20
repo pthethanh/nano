@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	stdruntime "runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -54,6 +55,7 @@ type (
 		onShutdown      func()
 		apiPathPrefix   string
 		httpRoutes      []httpRoute
+		autoMaxProcs    bool
 	}
 
 	service interface {
@@ -244,6 +246,8 @@ func (srv *Server) applyCustomOption(opt customServerOption) {
 		}
 	case shutdownTimeout:
 		srv.shutdownTimeout = opt.timeout
+	case autoMaxProcsOpt:
+		srv.autoMaxProcs = true
 	default:
 		// should not happen
 		srv.logger.Log(context.Background(), slog.LevelWarn, "unknown custom server option", "type", fmt.Sprintf("%T", opt))
@@ -251,6 +255,9 @@ func (srv *Server) applyCustomOption(opt customServerOption) {
 }
 
 func (srv *Server) listenAndServe(ctx context.Context) error {
+	if srv.autoMaxProcs {
+		stdruntime.SetDefaultGOMAXPROCS()
+	}
 	if srv.onShutdown != nil {
 		defer srv.onShutdown()
 	}

@@ -99,13 +99,18 @@ func StreamClientInterceptor(reporter metric.Reporter, opts ...Option) grpc.Stre
 			histogram.With("method", method, "code", code, "kind", "stream").Record(time.Since(start).Seconds())
 			return nil, err
 		}
-		return &clientStream{
+		cs := &clientStream{
 			ClientStream: stream,
 			method:       method,
 			startedAt:    start,
 			counter:      counter,
 			histogram:    histogram,
-		}, nil
+		}
+		// Safety net: if the stream is simply abandoned (ctx cancelled)
+		// without ever hitting a terminal error on one of the wrapped
+		// methods, still record the metric instead of leaking it.
+		cs.stop = context.AfterFunc(ctx, func() { cs.finish(ctx.Err()) })
+		return cs, nil
 	}
 }
 

@@ -63,6 +63,9 @@ func NewReader[T any](opts ...Option) (*Reader[T], error) {
 	for _, apply := range opts {
 		apply(r.opts)
 	}
+	if r.opts.logger != nil {
+		r.log = r.opts.logger
+	}
 
 	if r.opts.envPrefix != "" {
 		r.vp.SetEnvPrefix(r.opts.envPrefix)

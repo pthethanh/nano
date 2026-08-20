@@ -10,11 +10,11 @@ type gauge struct {
 	cv   *prometheus.GaugeVec
 }
 
-func newGauge(name string, labels ...string) *gauge {
+func newGauge(reg prometheus.Registerer, name string, labels ...string) *gauge {
 	cv := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: name,
 	}, labels)
-	prometheus.MustRegister(cv)
+	reg.MustRegister(cv)
 	return &gauge{
 		lbvl: &lbvl{},
 		cv:   cv,

@@ -24,15 +24,27 @@ type (
 	logger interface {
 		Log(ctx context.Context, level slog.Level, msg string, args ...any)
 	}
-	JSONCodec struct{}
+	JSONCodec[T any] struct{}
 )
 
-func (m JSONCodec) Marshal(v any) ([]byte, error) {
+func (m JSONCodec[T]) Marshal(v *T) ([]byte, error) {
 	return json.Marshal(v)
 }
 
-func (m JSONCodec) Unmarshal(data []byte, v any) error {
+func (m JSONCodec[T]) Unmarshal(data []byte, v *T) error {
 	return json.Unmarshal(data, v)
+}
+
+// natsHeaderFrom converts broker.PublishOptions.Headers into NATS message headers.
+func natsHeaderFrom(headers map[string]string) nats.Header {
+	if len(headers) == 0 {
+		return nil
+	}
+	h := make(nats.Header, len(headers))
+	for k, v := range headers {
+		h.Set(k, v)
+	}
+	return h
 }
 
 func (e *event[T]) Topic() string {
@@ -43,8 +55,14 @@ func (e *event[T]) Message() *T {
 	return e.m
 }
 
+// Ack is a no-op: this broker subscribes via plain core NATS
+// (Subscribe/QueueSubscribe), which has no application-level ack or
+// redelivery concept. The underlying nats.Msg.Ack is a JetStream-only
+// operation that would return an error (or, if the message happens to have
+// a Reply subject set for an unrelated request-reply exchange, send a
+// misleading response there) for messages delivered this way.
 func (e *event[T]) Ack() error {
-	return e.msg.Ack()
+	return nil
 }
 
 func (e *event[T]) Error() error {

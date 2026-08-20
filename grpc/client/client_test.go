@@ -102,7 +102,7 @@ func TestNewWithExplicitTLSCredentials(t *testing.T) {
 }
 
 func TestNewTokenCredentials(t *testing.T) {
-	cred := client.NewTokenCredentials("Bearer abc")
+	cred := client.NewTokenCredentials("Bearer abc", false)
 	md, err := cred.GetRequestMetadata(t.Context())
 	if err != nil {
 		t.Fatal(err)

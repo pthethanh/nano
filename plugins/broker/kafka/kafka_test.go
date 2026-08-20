@@ -29,7 +29,7 @@ func TestKafkaBroker_PublishSubscribe(t *testing.T) {
 	cfg.Consumer.Offsets.Initial = sarama.OffsetNewest
 	log.Info("kafka config", "cfg", cfg)
 	b := kafka.New(
-		kafka.Address[testMsg]([]string{"localhost:9092"}),
+		kafka.Address[testMsg]("localhost:9092"),
 		kafka.AsyncPublish[testMsg](),
 		kafka.Config[testMsg](cfg),
 	)

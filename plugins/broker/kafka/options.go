@@ -13,7 +13,7 @@ func Config[T any](conf *sarama.Config) Option[T] {
 	}
 }
 
-func Address[T any](addrs []string) Option[T] {
+func Address[T any](addrs ...string) Option[T] {
 	return func(b *Broker[T]) {
 		b.addrs = addrs
 	}
@@ -25,7 +25,7 @@ func AsyncPublish[T any]() Option[T] {
 	}
 }
 
-func OnAsyncPublishFailure[T any](f func(*PublishError)) Option[T] {
+func OnAsyncPublishFailure[T any](f func(*PublishError[T])) Option[T] {
 	return func(b *Broker[T]) {
 		b.async = true
 		b.onPublishFailure = f
@@ -41,7 +41,7 @@ func OnAsyncPublishSuccess[T any](f func(*T)) Option[T] {
 	}
 }
 
-func Codec[T any](c broker.Codec) Option[T] {
+func Codec[T any](c broker.Codec[T]) Option[T] {
 	return func(b *Broker[T]) {
 		b.codec = c
 	}

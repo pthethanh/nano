@@ -10,12 +10,12 @@ type histogram struct {
 	hv   *prometheus.HistogramVec
 }
 
-func newHistogram(name string, bucket []float64, labels ...string) *histogram {
+func newHistogram(reg prometheus.Registerer, name string, bucket []float64, labels ...string) *histogram {
 	hv := prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    name,
 		Buckets: bucket,
 	}, labels)
-	prometheus.MustRegister(hv)
+	reg.MustRegister(hv)
 	return &histogram{
 		lbvl: &lbvl{},
 		hv:   hv,

@@ -169,7 +169,10 @@ func (p *tracerProvider) Ended() []*recordingSpan {
 	defer p.mu.Unlock()
 	ended := make([]*recordingSpan, 0, len(p.spans))
 	for _, span := range p.spans {
-		if span.ended {
+		span.mu.Lock()
+		isEnded := span.ended
+		span.mu.Unlock()
+		if isEnded {
 			ended = append(ended, span)
 		}
 	}

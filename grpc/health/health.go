@@ -2,15 +2,17 @@ package health
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"path"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 type (
@@ -20,6 +22,9 @@ type (
 		cancelCtx context.Context
 		cancel    context.CancelFunc
 		apiPrefix string
+
+		mu       sync.Mutex
+		checkers map[string]context.CancelFunc
 	}
 
 	// CheckFunc is quick way to define a health checker.
@@ -84,18 +89,47 @@ func NewServer(opts ...ServerOption) *Server {
 // The interval is the time between subsequent health checks.
 // The timeout is the maximum time to wait for a health check to complete.
 func (s *Server) Add(srv Service) {
+	ctx, cancel := context.WithCancel(s.cancelCtx)
+
+	s.mu.Lock()
+	if s.checkers == nil {
+		s.checkers = make(map[string]context.CancelFunc)
+	}
+	if prev, ok := s.checkers[srv.Name]; ok {
+		prev() // stop any previous checker registered under the same name
+	}
+	s.checkers[srv.Name] = cancel
+	s.mu.Unlock()
+
 	go func() {
 		t := srv.Delay
 		for {
 			select {
 			case <-time.After(t):
 				s.checkAndUpdate(srv.Name, srv.Timeout, srv.Checker)
-			case <-s.cancelCtx.Done():
+			case <-ctx.Done():
 				return
 			}
 			t = srv.Interval
 		}
 	}()
+}
+
+// Remove stops the periodic checker started by Add for name and marks its
+// status as UNKNOWN, without affecting any other service or the server as a
+// whole. It is a no-op if name was never added (or was already removed).
+func (s *Server) Remove(name string) {
+	s.mu.Lock()
+	cancel, ok := s.checkers[name]
+	if ok {
+		delete(s.checkers, name)
+	}
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+	cancel()
+	s.SetServingStatus(name, grpc_health_v1.HealthCheckResponse_UNKNOWN)
 }
 
 // Register registers the health server with a gRPC server.
@@ -112,48 +146,53 @@ func (s *Server) HTTPHandler() (pathPrefix string, h http.Handler) {
 }
 
 // checkFunc implements http.Handler interface.
-// It returns the health status of the service in JSON format.
+// It returns the health status of the service in JSON format, with the HTTP
+// status code reflecting the result: 200 when SERVING, 503 otherwise. This
+// lets infrastructure that only inspects the status code (many load balancer
+// and Kubernetes HTTP probes do) still detect an unhealthy service.
 func (s *Server) checkFunc(w http.ResponseWriter, r *http.Request) {
 	rs, err := s.Check(r.Context(), &grpc_health_v1.HealthCheckRequest{
 		Service: r.URL.Query().Get("service"),
 	})
 	if err != nil {
-		b, err := json.Marshal(grpc_health_v1.HealthCheckResponse{
-			Status: grpc_health_v1.HealthCheckResponse_NOT_SERVING,
-		})
-		if err != nil {
-			b = fmt.Appendf(nil, `{"status":%d}`, grpc_health_v1.HealthCheckResponse_NOT_SERVING)
-		}
-		w.WriteHeader(http.StatusOK)
-		w.Write(b)
-		return
+		rs = &grpc_health_v1.HealthCheckResponse{Status: grpc_health_v1.HealthCheckResponse_NOT_SERVING}
 	}
-	b, err := json.Marshal(rs)
-	if err != nil {
-		b = fmt.Appendf(nil, `{"status":%d}`, grpc_health_v1.HealthCheckResponse_NOT_SERVING)
-	}
-	w.WriteHeader(http.StatusOK)
-	w.Write(b)
+	writeHealthJSON(w, rs, rs.GetStatus() == grpc_health_v1.HealthCheckResponse_SERVING)
 }
 
+// listFunc implements http.Handler interface. The response is considered
+// unavailable (HTTP 503) if the list call itself fails, or if any listed
+// service is not SERVING.
 func (s *Server) listFunc(w http.ResponseWriter, r *http.Request) {
 	rs, err := s.List(r.Context(), &grpc_health_v1.HealthListRequest{})
 	if err != nil {
-		b, err := json.Marshal(grpc_health_v1.HealthCheckResponse{
-			Status: grpc_health_v1.HealthCheckResponse_NOT_SERVING,
-		})
-		if err != nil {
-			b = fmt.Appendf(nil, `{"":%d}`, grpc_health_v1.HealthCheckResponse_NOT_SERVING)
-		}
-		w.WriteHeader(http.StatusOK)
-		w.Write(b)
+		writeHealthJSON(w, &grpc_health_v1.HealthCheckResponse{Status: grpc_health_v1.HealthCheckResponse_NOT_SERVING}, false)
 		return
 	}
-	b, err := json.Marshal(rs)
-	if err != nil {
-		b = fmt.Appendf(nil, `{"":%d}`, grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+	ok := true
+	for _, status := range rs.GetStatuses() {
+		if status.GetStatus() != grpc_health_v1.HealthCheckResponse_SERVING {
+			ok = false
+			break
+		}
 	}
-	w.WriteHeader(http.StatusOK)
+	writeHealthJSON(w, rs, ok)
+}
+
+// writeHealthJSON marshals a proto health message using proto3 JSON (so enum
+// values render as their name, e.g. "SERVING", consistent with grpc-gateway
+// elsewhere in this framework) and sets the HTTP status code from ok.
+func writeHealthJSON(w http.ResponseWriter, m proto.Message, ok bool) {
+	b, err := protojson.Marshal(m)
+	if err != nil {
+		b = fmt.Appendf(nil, `{"status":%d}`, grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+		ok = false
+	}
+	if ok {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
 	w.Write(b)
 }
 

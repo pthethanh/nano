@@ -88,6 +88,10 @@ type (
 		emptyOpt
 		timeout time.Duration
 	}
+
+	autoMaxProcsOpt struct {
+		emptyOpt
+	}
 )
 
 var (
@@ -150,16 +154,32 @@ func Timeout(read, write time.Duration) grpc.ServerOption {
 //
 // It also updates the server's self-dial options so the internal gateway dials
 // the gRPC server using TLS instead of insecure credentials.
+//
+// Panics if the certificate file can't be loaded. grpc.ServerOption values
+// are typically constructed inline (e.g. server.New(server.TLS(...))),
+// which offers no path to return an error, hence the panic; use TLSErr if
+// you need to validate the cert path without crashing the process.
 func TLS(certFile, keyFile string) grpc.ServerOption {
-	creds, err := credentials.NewClientTLSFromFile(certFile, "")
+	opt, err := TLSErr(certFile, keyFile)
 	if err != nil {
 		panic(err)
+	}
+	return opt
+}
+
+// TLSErr is the error-returning equivalent of TLS, for callers that load
+// certificate paths from configuration and want to handle a bad path as a
+// normal error instead of a panic.
+func TLSErr(certFile, keyFile string) (grpc.ServerOption, error) {
+	creds, err := credentials.NewClientTLSFromFile(certFile, "")
+	if err != nil {
+		return nil, err
 	}
 	return tlsOpt{
 		keyFile:  keyFile,
 		certFile: certFile,
 		dialOpt:  []grpc.DialOption{grpc.WithTransportCredentials(creds)},
-	}
+	}, nil
 }
 
 // Address serves both gRPC and HTTP traffic on the same address.
@@ -250,6 +270,20 @@ func ShutdownTimeout(d time.Duration) grpc.ServerOption {
 	return shutdownTimeout{
 		timeout: d,
 	}
+}
+
+// AutoMaxProcs enables container-aware GOMAXPROCS for this server's process.
+//
+// It sets GOMAXPROCS to match the CPU quota visible to the process (for
+// example, a Kubernetes pod's CPU limit) instead of the host's full CPU
+// count, and keeps it updated if the quota changes. This removes the need
+// for a separate automaxprocs-style dependency.
+//
+// It overrides any GOMAXPROCS value set via the GOMAXPROCS environment
+// variable or a prior runtime.GOMAXPROCS call, so only enable it when you
+// want this package to own that decision.
+func AutoMaxProcs() grpc.ServerOption {
+	return autoMaxProcsOpt{}
 }
 
 // WithIncomingHeaderMatcher returns a grpc-gateway option that forwards the

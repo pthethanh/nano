@@ -1,6 +1,6 @@
 module github.com/pthethanh/nano/plugins/broker/nats
 
-go 1.24.5
+go 1.27.0
 
 require (
 	github.com/nats-io/nats.go v1.31.0

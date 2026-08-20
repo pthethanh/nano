@@ -24,7 +24,7 @@ type (
 		worker int
 		buf    int
 		wg     *sync.WaitGroup
-		opened bool
+		opened atomic.Bool
 	}
 
 	subscriber[T any] struct {
@@ -99,6 +99,7 @@ func (sub *subscriber[T]) Unsubscribe() error {
 	if atomic.AddInt32(&sub.closed, 1) > 1 {
 		return nil
 	}
+	sub.close()
 	return nil
 }
 
@@ -108,26 +109,23 @@ func (sub *subscriber[T]) isClosed() bool {
 
 // Open implements broker.Broker interface.
 func (br *Broker[T]) Open(ctx context.Context) error {
-	wg := sync.WaitGroup{}
-	wg.Add(br.worker)
-	br.wg.Add(br.worker)
+	if !br.opened.CompareAndSwap(false, true) {
+		// Already open: don't spawn a second set of worker goroutines.
+		return nil
+	}
 	for i := 0; i < br.worker; i++ {
-		go func() {
-			wg.Done()
-			defer br.wg.Done()
+		br.wg.Go(func() {
 			for h := range br.ch {
 				_ = h()
 			}
-		}()
+		})
 	}
-	wg.Wait()
-	br.opened = true
 	return nil
 }
 
 // Publish implements broker.Broker interface.
 func (br *Broker[T]) Publish(ctx context.Context, topic string, m *T, opts ...broker.PublishOption) error {
-	if !br.opened {
+	if !br.opened.Load() {
 		return ErrInvalidConnectionState
 	}
 	br.mu.RLock()
@@ -168,7 +166,7 @@ func (br *Broker[T]) Publish(ctx context.Context, topic string, m *T, opts ...br
 
 // Subscribe implements broker.Broker interface.
 func (br *Broker[T]) Subscribe(ctx context.Context, topic string, h func(broker.Event[T]) error, opts ...broker.SubscribeOption) (broker.Subscriber, error) {
-	if !br.opened {
+	if !br.opened.Load() {
 		return nil, ErrInvalidConnectionState
 	}
 	subOpts := &broker.SubscribeOptions{}
@@ -198,7 +196,7 @@ func (br *Broker[T]) Subscribe(ctx context.Context, topic string, h func(broker.
 
 // CheckHealth implements health.Checker interface.
 func (br *Broker[T]) CheckHealth(ctx context.Context) error {
-	if !br.opened {
+	if !br.opened.Load() {
 		return ErrInvalidConnectionState
 	}
 	return nil
@@ -206,7 +204,7 @@ func (br *Broker[T]) CheckHealth(ctx context.Context) error {
 
 // Close implements broker.Broker interface.
 func (br *Broker[T]) Close(ctx context.Context) error {
-	br.opened = false
+	br.opened.Store(false)
 	close(br.ch)
 	br.wg.Wait()
 	// unsubscribe all subscribers.

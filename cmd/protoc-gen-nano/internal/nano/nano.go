@@ -56,7 +56,6 @@ func (g *nano) GenerateImports(file *generator.FileDescriptor, imports map[gener
 	g.P(`"github.com/pthethanh/nano/grpc/client"`)
 	g.P(`"context"`)
 	if g.gen.GenGW {
-		g.P("grpc ", `"google.golang.org/grpc"`)
 		g.P(`"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"`)
 	}
 	g.P(")")
